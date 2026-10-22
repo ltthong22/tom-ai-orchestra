@@ -1,0 +1,725 @@
+{
+ "count": 90,
+ "skills": {
+  "local-agent-reach": {
+   "name": "local-agent-reach",
+   "title": "Agent Reach — lớp \"gắn mắt\" cho agent (bản wrapper TomStudio)",
+   "summary": "name: local-agent-reach description: Agent Reach (Panniantong/Agent-Reach) — CLI \"gắn mắt\" cho AI agent: lớp năng lực (capability layer) chọn + cài + kiểm tra sức khỏe + định tuyến backend cho ~16 kênh đọc nội dung online (GitHub, YouTube, web, RSS, Bilibili, V2EX, Reddit, X, Facebook, Instagram, tiểu hồng thư...). MIT, ~99.5K sao (19/10/2026). CHỈ dùng phần kênh public không cần đăng nhập; kênh c",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-agent-reach/SKILL.md",
+   "size_kb": 5.4
+  },
+  "local-agentbrain": {
+   "name": "local-agentbrain",
+   "title": "AgentBrain CLI Skill",
+   "summary": "Operate the AgentBrain enterprise data hub from the terminal via `agentbrain` (npm: `agentbrain-cli`). Covers 30+ command groups: auth, orgs, connectors, workflows, knowledge bases, media, knowledge graph, permissions, governance, LLM/prompt config, cost/usage, audit. **This skill handles:** installing, configuring, authenticating, and running every `agentbrain` subcommand end-to-end; interpreting",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-agentbrain/SKILL.md",
+   "size_kb": 11.9
+  },
+  "local-ai-memory": {
+   "name": "local-ai-memory",
+   "title": "ai-memory — bản local của TomStudio",
+   "summary": "Bộ nhớ dài hạn dùng chung cho AI coding agent (akitaonrails/ai-memory, GitHub 11.733 sao, MIT, Rust, bản release đã test: **3.1.1**). Một binary duy nhất: hooks vòng đời tự ghi lại phiên làm việc đã lọc secret → server local (127.0.0.1:49374) biên dịch thành **wiki markdown trong git** + index SQLite (FTS5 + embedding local) → mọi agent nối vào qua MCP đọc chung một bộ nhớ. Đổi agent giữa chừng (C",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-ai-memory/SKILL.md",
+   "size_kb": 3.9
+  },
+  "local-algorithmic-art": {
+   "name": "local-algorithmic-art",
+   "title": "local-algorithmic-art",
+   "summary": "Algorithmic philosophies are computational aesthetic movements that are then expressed through code. Output .md files (philosophy), .html files (interactive viewer), and .js files (generative algorithms). This happens in two steps: 1. Algorithmic Philosophy Creation (.md file) 2. Express by creating p5.js generative art (.html + .js files) First, undertake this task: To begin, create an ALGORITHMI",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-algorithmic-art/SKILL.md",
+   "size_kb": 19.0
+  },
+  "local-anysearch": {
+   "name": "local-anysearch",
+   "title": "Search. Optional filter: --max_results N (1-10, default 10)",
+   "summary": "AnySearch is a unified real-time search service supporting general web search, vertical domain search, parallel batch search, and full-page content extraction. The bundled cross-platform CLI tools call the public HTTP endpoints directly; no MCP server installation or JSON-RPC wrapper is required. **On GoClaw:** run the CLI through the `exec` tool. Prefer the configured `Command` from `runtime.conf",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-anysearch/SKILL.md",
+   "size_kb": 6.9
+  },
+  "local-ask-matt": {
+   "name": "local-ask-matt",
+   "title": "Ask Matt",
+   "summary": "You don't remember every skill, so ask. Before stating what a skill does or recommending a step be skipped, read that skill's SKILL.md: the summaries here are for orientation only. A **flow** is a path through the skills. Most paths run along one **main flow**, and two **on-ramps** merge onto it. Everything else is standalone, or a vocabulary layer that runs underneath. The route most work travels",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-ask-matt/SKILL.md",
+   "size_kb": 12.3
+  },
+  "local-baoyu-design": {
+   "name": "local-baoyu-design",
+   "title": "Baoyu Design — bản local của TomStudio",
+   "summary": "name: local-baoyu-design description: Baoyu Design (JimLiu/baoyu-design) — \"Claude Design\" chạy local: dựng mockup UI, prototype tương tác, wireframe, landing page, slide deck, HTML email, flier/brochure, tài liệu, video animation, 3D object... dưới dạng HTML TỰ CHỨA, kèm xuất PPTX editable (giữ animation), MP4, PDF; 53 luồng chuyên biệt, import Figma .fig offline, design system có ràng buộc. Dùng",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-baoyu-design/SKILL.md",
+   "size_kb": 6.9
+  },
+  "local-brand-guidelines": {
+   "name": "local-brand-guidelines",
+   "title": "Anthropic Brand Styling",
+   "summary": "To access Anthropic's official brand identity and style resources, use this skill. **Keywords**: branding, corporate identity, visual identity, post-processing, styling, brand colors, typography, Anthropic brand, visual formatting, visual design - Dark: `#141413` - Primary text and dark backgrounds - Light: `#faf9f5` - Light backgrounds and text on dark - Mid Gray: `#b0aea5` - Secondary elements -",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-brand-guidelines/SKILL.md",
+   "size_kb": 2.0
+  },
+  "local-canvas-design": {
+   "name": "local-canvas-design",
+   "title": "local-canvas-design",
+   "summary": "These are instructions for creating design philosophies - aesthetic movements that are then EXPRESSED VISUALLY. Output only .md files, .pdf files, and .png files. Complete this in two steps: 1. Design Philosophy Creation (.md file) 2. Express by creating it on a canvas (.pdf file or .png file) First, undertake this task: To begin, create a VISUAL PHILOSOPHY (not layouts or templates) that will be ",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-canvas-design/SKILL.md",
+   "size_kb": 11.4
+  },
+  "local-claude-api": {
+   "name": "local-claude-api",
+   "title": "Building LLM-Powered Applications with Claude",
+   "summary": "This skill helps you build LLM-powered applications with Claude. Choose the right surface based on your needs, detect the project language, then read the relevant language-specific documentation. Scan the target file (or, if no target file, the prompt and project) for non-Anthropic provider markers - `import openai`, `from openai`, `langchain_openai`, `OpenAI(`, `gpt-4`, `gpt-5`, file names like `",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-claude-api/SKILL.md",
+   "size_kb": 101.7
+  },
+  "local-code-review": {
+   "name": "local-code-review",
+   "title": "local-code-review",
+   "summary": "Two-axis review of the diff between `HEAD` and a fixed point the user supplies: - **Standards**: does the code conform to this repo's documented coding standards? - **Spec**: does the code faithfully implement the originating issue / spec? Both axes run as **parallel sub-agents** so they don't pollute each other's context, then this skill aggregates their findings. The issue tracker should have be",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-code-review/SKILL.md",
+   "size_kb": 6.2
+  },
+  "local-codebase-design": {
+   "name": "local-codebase-design",
+   "title": "Codebase Design",
+   "summary": "Design **deep modules**: a lot of behaviour behind a small interface, placed at a clean seam, testable through that interface. Use this language and these principles wherever code is being designed or restructured. The aim is leverage for callers, locality for maintainers, and testability for everyone. Use these terms exactly: don't substitute \"component,\" \"service,\" \"API,\" or \"boundary.\" Consiste",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-codebase-design/SKILL.md",
+   "size_kb": 6.1
+  },
+  "local-deepseek-harness": {
+   "name": "local-deepseek-harness",
+   "title": "DeepSeek Harness — bản local của TomStudio",
+   "summary": "name: local-deepseek-harness description: DeepSeek Harness (deepseek-ai/deepseek-harness, CLI `dsh`) — agent runtime mã nguồn mở của DeepSeek, kiến trúc \"everything is a plugin\" (model/tool/skill/session/UI đều là plugin thay được), MIT. Ứng viên LÕI cho dự án AI local của TomStudio: chạy local, cắm nhiều nhà model (DeepSeek, Muse, ChatGPT, Gemini, model local qua Ollama/LM Studio), có Web UI + ap",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-deepseek-harness/SKILL.md",
+   "size_kb": 3.9
+  },
+  "local-diagnosing-bugs": {
+   "name": "local-diagnosing-bugs",
+   "title": "Diagnosing Bugs",
+   "summary": "A discipline for hard bugs. Skip phases only when explicitly justified. When exploring the codebase, read `GLOSSARY.md` (if it exists) to get a clear mental model of the relevant modules, and check ADRs in the area you're touching. This skill has you show commands, outputs and captured artifacts. **Redact every secret first**: write `<REDACTED>` in its place. Build loops against env vars, so the c",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-diagnosing-bugs/SKILL.md",
+   "size_kb": 8.4
+  },
+  "local-diagram-design": {
+   "name": "local-diagram-design",
+   "title": "Diagram Design — bản local của TomStudio",
+   "summary": "name: local-diagram-design description: Diagram Design (cathrynlavery/diagram-design) — agent skill vẽ 45 kiểu sơ đồ biên tập (editorial) xuất file HTML+SVG tự chứa: flowchart, sequence, ER, Gantt, org chart, timeline, kanban, user journey, Sankey, Wardley map... Phong cách sắc nét, không đổ bóng, không \"mì ăn liền Mermaid\". Dùng khi anh cần sơ đồ đẹp cho tài liệu, slide, bài viết, tài liệu học TL",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-diagram-design/SKILL.md",
+   "size_kb": 2.7
+  },
+  "local-dify": {
+   "name": "local-dify",
+   "title": "Dify — cẩm nang dựng nền tảng app AI cho TomStudio",
+   "summary": "description: Dify (langgenius/dify) — nền tảng hạ tầng dựng app AI kéo thả, tự host bằng Docker Compose: chatbot, agent agentic, workflow, text generator, RAG trên tài liệu nội bộ, hỗ trợ hàng trăm model LLM, quản lý prompt/model, LLMOps, Backend-as-a-Service (API tích hợp vào app khác). Cẩm nang quyết định KHI NÀO dựng Dify cho TomStudio (ứng viên số 1 khi anh muốn app AI riêng cho khách hoặc cre",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-dify/SKILL.md",
+   "size_kb": 7.1
+  },
+  "local-doc-coauthoring": {
+   "name": "local-doc-coauthoring",
+   "title": "Doc Co-Authoring Workflow",
+   "summary": "This skill provides a structured workflow for guiding users through collaborative document creation. Act as an active guide, walking users through three stages: Context Gathering, Refinement & Structure, and Reader Testing. **Trigger conditions:** - User mentions writing documentation: \"write a doc\", \"draft a proposal\", \"create a spec\", \"write up\" - User mentions specific doc types: \"PRD\", \"design",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-doc-coauthoring/SKILL.md",
+   "size_kb": 15.1
+  },
+  "local-docx": {
+   "name": "local-docx",
+   "title": "DOCX creation, editing, and analysis",
+   "summary": "A `.docx` is a ZIP archive of XML files. Choose your approach by task: | **Create** a new document | Write a `docx` (npm) script — see gotchas below | | **Edit** an existing document | `unzip` → edit `word/document.xml` → `zip` (docx-js cannot open existing files) | | **Read** content | `pandoc -t markdown file.docx` | > Script paths below are relative to this skill's directory. `docx` is preinsta",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-docx/SKILL.md",
+   "size_kb": 6.0
+  },
+  "local-domain-modeling": {
+   "name": "local-domain-modeling",
+   "title": "Domain Modeling",
+   "summary": "Actively build and sharpen the project's domain model as you design. This is the *active* discipline: challenging terms, inventing edge-case scenarios, and writing the glossary and decisions down the moment they crystallise. (Merely *reading* `GLOSSARY.md` for vocabulary is not this skill: that's a one-line habit any skill can do. This skill is for when you're changing the model, not just consumin",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-domain-modeling/SKILL.md",
+   "size_kb": 3.2
+  },
+  "local-ecc": {
+   "name": "local-ecc",
+   "title": "ECC — bản local của TomStudio",
+   "summary": "description: ECC (affaan-m/ECC) — bộ plugin/harness tối ưu cho AI coding agent (Claude Code, Codex, OpenCode, Cursor): 272 skill + 71 agent chuyên trách + lệnh có sẵn, gom kỹ năng, trí nhớ, bảo mật và kỷ luật \"nghiên cứu trước khi code\" thành một hệ thống. Dùng khi em làm dev/app cho anh và muốn agent làm việc kỷ luật hơn (tự kiểm tra, ghi nhớ, bảo mật). Repo: ~/workspace/skills-src/ecc/ (đọc agen",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-ecc/SKILL.md",
+   "size_kb": 2.6
+  },
+  "local-evondev-ui-ux": {
+   "name": "local-evondev-ui-ux",
+   "title": "UI/UX cho hệ thống dashboard",
+   "summary": "> **Chưa đi hết mục 0 thì KHÔNG viết một dòng code nào trong lượt này.** > **Mặc định là làm như một designer** (`references/design-process.md`, nhánh `U`): brief, > việc chính của từng màn, 2–3 wireframe, người dùng chọn rồi mới dựng. Đề viết tiếng Việt > hay tiếng Anh đều vậy. Hai cổng chờ của nhánh đó (duyệt brief, chọn wireframe) là hai chỗ > duy nhất được dừng hỏi (lối design system có một cổ",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-evondev-ui-ux/SKILL.md",
+   "size_kb": 41.6
+  },
+  "local-frontend-design": {
+   "name": "local-frontend-design",
+   "title": "Frontend Design",
+   "summary": "Approach this as the design lead at a design studio known for giving every client a distinct visual identity that is not mistaken for anyone else's. This client has already rejected proposals that felt cliché or templated, and is paying for a distinctive point of view: make deliberate, opinionated choices about palette, typography, and layout that are specific to this brief, and take aesthetic ris",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-frontend-design/SKILL.md",
+   "size_kb": 9.0
+  },
+  "local-ghosttrack": {
+   "name": "local-ghosttrack",
+   "title": "GhostTrack — bản local của TomStudio",
+   "summary": "Tool OSINT mã nguồn mở (HunxByts/GhostTrack, GitHub ~19,6k sao, tạo 04/2023, Python, KHÔNG có license file) — tra cứu thông tin công khai theo 3 ngả: số điện thoại, địa chỉ IP, username. Anh Tom chốt \"làm tool cho bản thân\" ngày 20/10/2026 sau reel của page \"AI xàm xí\". - Bản clone gốc (nguyên vẹn, không sửa): `~/workspace/skills-src/ghosttrack/` (file chính `GhostTR.py`, venv riêng `.venv` đã cài",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-ghosttrack/SKILL.md",
+   "size_kb": 3.1
+  },
+  "local-go2rtc": {
+   "name": "local-go2rtc",
+   "title": "go2rtc — bản local của TomStudio",
+   "summary": "description: go2rtc (AlexxIT/go2rtc) — bản local của TomStudio Repo gốc đã clone tại `~/workspace/skills-src/go2rtc/` (5,2MB, `AlexxIT/go2rtc`, **14.415 sao / 1.407 fork** GitHub tính đến 20/10/2026, tạo 18/08/2022, push 19/10/2026, **MIT**, viết bằng Go). Dùng khi: gom camera nhà lên NAS làm trung tâm xem trực tiếp (WebRTC trễ <0,5s), cầu nối camera vào app Home của iPhone, đàm thoại 2 chiều, hoặ",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-go2rtc/SKILL.md",
+   "size_kb": 3.6
+  },
+  "local-goclaw": {
+   "name": "local-goclaw",
+   "title": "GoClaw Gateway CLI Administration",
+   "summary": "Use this skill when the user asks you to operate, inspect, administer, or debug a GoClaw gateway through the `goclaw` CLI/runtime package. 1. Identify the exact binary before running commands. 2. Prefer read-only inspection before mutating actions. 3. Never print, paste, or store API keys, bearer tokens, OAuth tokens, database credentials, private keys, cookies, or `.env` contents in chat, issues,",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-goclaw/SKILL.md",
+   "size_kb": 8.1
+  },
+  "local-goclaw-docs-audit": {
+   "name": "local-goclaw-docs-audit",
+   "title": "GoClaw Docs Audit",
+   "summary": "> Detect which GoClaw docs need updating when GoClaw source code changes. > Cross-check accuracy against GoClaw source docs (source of truth). `/goclaw-docs-audit` or `/goclaw-docs-audit <commit-range>` or `/goclaw-docs-audit <file1> <file2>` - `/goclaw-docs-audit` — audit all changes since last audit (or last commit if first run) - `/goclaw-docs-audit HEAD~5..HEAD` — audit specific commit range -",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-goclaw-docs-audit/SKILL.md",
+   "size_kb": 6.7
+  },
+  "local-grilling": {
+   "name": "local-grilling",
+   "title": "local-grilling",
+   "summary": "Interview the user relentlessly until you reach a shared understanding. Map this as a **design tree**: every decision branches into the decisions that hang off it. Work the tree in **rounds**. The **frontier** is every decision whose prerequisites are already settled: the questions you can ask _now_ without guessing at answers you haven't heard yet. Ask the whole frontier in one round: number each",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-grilling/SKILL.md",
+   "size_kb": 1.9
+  },
+  "local-handoff": {
+   "name": "local-handoff",
+   "title": "local-handoff",
+   "summary": "Write a handoff document summarising the current conversation so a fresh agent can continue the work. Save to the temporary directory of the user's OS (`$TMPDIR`, else `/tmp`; `%TEMP%` on Windows) - not the current workspace. Include a \"suggested skills\" section in the document, naming which skills the next agent should call the Skill tool for. Do not duplicate content already captured in other ar",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-handoff/SKILL.md",
+   "size_kb": 0.8
+  },
+  "local-hol-guard": {
+   "name": "local-hol-guard",
+   "title": "HOL Guard",
+   "summary": "HOL Guard protects local AI harnesses before tools run. Use it for runtime safety, approval review, package verification, and auditable evidence around agent actions. - Never read `.env` files. - Never bypass Guard approvals. - Do not claim a workspace is protected until a Guard command proves it. - Prefer reversible Guard commands over manual harness configuration edits. - Treat scanner failures ",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-hol-guard/SKILL.md",
+   "size_kb": 3.2
+  },
+  "local-hyperframes": {
+   "name": "local-hyperframes",
+   "title": "Hyperframes — bản local của TomStudio",
+   "summary": "name: local-hyperframes description: Hyperframes (heygen-com/hyperframes) — framework dựng video bằng HTML cho AI agent: viết HTML+CSS quen thuộc, máy tự dựng thành video MP4 (trình duyệt ảo chụp từng khung hình rồi ghép). Có sẵn 21 skill quy trình: video giới thiệu sản phẩm từ URL, explainer không người dẫn, gắn phụ đề, recut talking-head với đồ họa, motion graphics, slideshow/deck điều hướng đượ",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-hyperframes/SKILL.md",
+   "size_kb": 3.0
+  },
+  "local-hypit": {
+   "name": "local-hypit",
+   "title": "Hypit — bản local của TomStudio",
+   "summary": "description: Hypit (hypit-ai/hypit) — skill nhân bản video viral bằng AI agent: từ 1 video gốc, agent tách thành \"công thức\" (SVML) rồi tạo 100 biến thể (đổi mặt người dẫn, đổi thoại, đổi B-roll, đổi ngôn ngữ/sản phẩm) giữ nguyên cấu trúc. Miễn phí phần mềm, tốn API model do mình tự cắm key (~1,1 USD/video 20s theo ví dụ thật). Dùng khi cần test nhiều bản quảng cáo từ 1 video gốc (mảng KOC/ads của",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-hypit/SKILL.md",
+   "size_kb": 4.3
+  },
+  "local-implement": {
+   "name": "local-implement",
+   "title": "Implement from a spec or tickets",
+   "summary": "- Read the spec and every ticket before writing code, and restate the ticket titles back so the user can correct a wrong reading. - Ask when a ticket reference is ambiguous instead of guessing which ticket it names. - Treat tickets as a task graph with blocking relationships, not a step list. Find the frontier of tickets that are ready and work that frontier first. - Pick the light path below for ",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-implement/SKILL.md",
+   "size_kb": 3.3
+  },
+  "local-implement-spec": {
+   "name": "local-implement-spec",
+   "title": "local-implement-spec",
+   "summary": "You have been provided a spec. This spec should have tickets associated with it, describing how to implement the spec. The issue tracker should have been provided to you. If not, tell the user to run `/setup-matt-pocock-skills`. The goal is the entire spec implemented on a single **integration branch**, with every ticket resolved the way the issue tracker closes work. The tickets are not a list of",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-implement-spec/SKILL.md",
+   "size_kb": 2.7
+  },
+  "local-improve-codebase-architecture": {
+   "name": "local-improve-codebase-architecture",
+   "title": "Improve Codebase Architecture",
+   "summary": "Surface architectural friction and propose **deepening opportunities**: refactors that turn shallow modules into deep ones. The aim is testability and AI-navigability. This command is _informed_ by the project's domain model and built on a shared design vocabulary: - Call the Skill tool with \"codebase-design\" for the architecture vocabulary (**module**, **interface**, **depth**, **seam**, **adapte",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-improve-codebase-architecture/SKILL.md",
+   "size_kb": 5.8
+  },
+  "local-internal-comms": {
+   "name": "local-internal-comms",
+   "title": "local-internal-comms",
+   "summary": "To write internal communications, use this skill for: - 3P updates (Progress, Plans, Problems) - Company newsletters To write any internal communication: 1. **Identify the communication type** from the request 2. **Load the appropriate guideline file** from the `examples/` directory: - `examples/3p-updates.md` - For Progress/Plans/Problems team updates - `examples/company-newsletter.md` - For comp",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-internal-comms/SKILL.md",
+   "size_kb": 1.2
+  },
+  "local-invoices-billing": {
+   "name": "local-invoices-billing",
+   "title": "Invoices & Billing",
+   "summary": "**What it is:** Invoices from billable time or fixed fees, with tax, due dates and aging. Works out the smallest useful **Invoices & Billing** setup for the business in front of it, then builds it only when asked. The default output is a short recommendation, not a spreadsheet. Artifacts - CSV, SQL DDL, JSON Schema, Notion mapping - are produced on request, from one field list so they cannot drift",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-invoices-billing/SKILL.md",
+   "size_kb": 16.9
+  },
+  "local-kev": {
+   "name": "local-kev",
+   "title": "Kev — bản local của TomStudio",
+   "summary": "description: Kev (jaredpalmer/kev, Apache-2.0) — họ model QUYẾT ĐỊNH/PHÂN LOẠI chạy local bạn tự train được, bản mã nguồn mở của ý tưởng Jev: trả lời có/không (noul), chọn đáp án (choice), chấm điểm (score) kèm xác suất đã hiệu chuẩn, phản hồi 70–500ms. Dùng khi cần một bộ phân loại/định tuyến/lọc rác chạy tại nhà cho bot Telegram, cổng khách, cron rà inbox (không tốn API, dữ liệu không ra ngoài),",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-kev/SKILL.md",
+   "size_kb": 5.6
+  },
+  "local-lemo-opuscar": {
+   "name": "local-lemo-opuscar",
+   "title": "Lemo-Opuscar",
+   "summary": "description: Direct and produce a short film made entirely in code, in one of the styles of the Lemo-Opuscar library (e.g. Impasto Oil Painting 油画厚涂, Watercolor Brush 水彩笔刷, Chinese Ink Wash 中国水墨, Ukiyo-e 浮世绘, Whiteboard Explainer 白板讲解). Use when the user asks for a video, film, short, promo, explainer or animation (视频、短片、动画、宣传片) in a named style; when they want a film made about their own topic an",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-lemo-opuscar/SKILL.md",
+   "size_kb": 2.4
+  },
+  "local-marketing-mindset": {
+   "name": "local-marketing-mindset",
+   "title": "Marketing Mindset",
+   "summary": "A high-level operating system for marketing and client acquisition, distilled from 15 years of hands-on B2B internet marketing. This is not a bag of tactics. It is a way of thinking that lets an agent evaluate a real user's marketing request, give honest feedback, and form its own hypotheses — from writing an ad, to finding first customers, to judging whether doing X will produce Y. It matters mos",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-marketing-mindset/SKILL.md",
+   "size_kb": 22.0
+  },
+  "local-markitdown": {
+   "name": "local-markitdown",
+   "title": "MarkItDown — bản local của TomStudio",
+   "summary": "name: local-markitdown description: MarkItDown (microsoft/markitdown) — công cụ chuyển tài liệu văn phòng sang Markdown để AI đọc: PDF, DOCX, PPTX, XLSX, ảnh (OCR), HTML, âm thanh (transcript), CSV, EPUB... Dùng khi anh đưa file tài liệu (hóa đơn, hợp đồng, báo giá, file học TLU, catalog...) và cần trích nội dung ra để đọc/phân tích/tổng hợp. Môi trường chạy: ~/workspace/mdvenv (markitdown 0.1.8 +",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-markitdown/SKILL.md",
+   "size_kb": 2.6
+  },
+  "local-mcp-builder": {
+   "name": "local-mcp-builder",
+   "title": "MCP Server Development Guide",
+   "summary": "Create MCP (Model Context Protocol) servers that enable LLMs to interact with external services through well-designed tools. The quality of an MCP server is measured by how well it enables LLMs to accomplish real-world tasks. Creating a high-quality MCP server involves four main phases: **API Coverage vs. Workflow Tools:** Balance comprehensive API endpoint coverage with specialized workflow tools",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-mcp-builder/SKILL.md",
+   "size_kb": 8.7
+  },
+  "local-morphicons": {
+   "name": "local-morphicons",
+   "title": "morphicons — bản local của TomStudio",
+   "summary": "name: local-morphicons description: morphicons (guillermolg00, MIT, v2.0.0) — thư viện biến hình icon SVG: bất kỳ icon nào cũng morph sang icon khác bằng vật lý lò xo (spring), zero dependency, ~7KB gzip, ăn dữ liệu icon của Lucide/Tabler/Heroicons/Material Symbols/Phosphor hoặc path SVG thô. Dùng khi làm giao diện các app của studio mà muốn icon chuyển trạng thái có animation (menu↔đóng, play↔pau",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-morphicons/SKILL.md",
+   "size_kb": 3.3
+  },
+  "local-nlb-submit": {
+   "name": "local-nlb-submit",
+   "title": "NLB Submit (`nlb-submit`)",
+   "summary": "Autonomous AgentSkill for scanning a codebase, structuring a rich `ProductDocument` with 17 block types, computing canonical SHA-256 hashes, and submitting the listing to the **Next Level Builders Directory** (`https://nextlevelbuilder.io` or `https://staging.nextlevelbuilder.io`). [1. Scan Repo] -> [2. Select Template] -> [3. Author product.json] -> [4. Validate & Hash] -> [5. Preview] -> [6. Sub",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-nlb-submit/SKILL.md",
+   "size_kb": 6.1
+  },
+  "local-ods": {
+   "name": "local-ods",
+   "title": "ODS — bản local của TomStudio",
+   "summary": "description: ODS — Osmantic Deployment System (Osmantic/ODS, Apache-2.0): bộ cài AI server nội bộ 1 lệnh, tự dựng stack llama.cpp + Open WebUI (cổng 3000) + dashboard GPU (3001/3011) + RAG/SearXNG/Whisper/n8n, tự nhận diện card đồ họa, mồi model nhỏ Qwen3.5 2B dùng ngay rồi tự nâng model lớn. Dùng khi cần dựng trạm AI riêng tư cho studio/nhà (dữ liệu không ra ngoài) — đặc biệt là đường đi lâu dài ",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-ods/SKILL.md",
+   "size_kb": 4.6
+  },
+  "local-one-click-portable-delivery": {
+   "name": "local-one-click-portable-delivery",
+   "title": "One-Click Portable Delivery",
+   "summary": "Ship local tools the user runs with one click and zero setup: the runtime travels with the build, every launcher is executed on this machine before handoff, and each release carries a visible version stamp. 1. Detect the target environment first: OS, available runtimes, and how the user launches things (double-click vs terminal). Never assume the user's machine matches this VM. 2. Bundle the runti",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-one-click-portable-delivery/SKILL.md",
+   "size_kb": 2.3
+  },
+  "local-openmaic": {
+   "name": "local-openmaic",
+   "title": "OpenMAIC — bản local của TomStudio",
+   "summary": "description: OpenMAIC (THU-MAIC/OpenMAIC) — lớp học ảo đa tác nhân: nhiều AI đóng vai giảng viên/trợ giảng/bạn học để tạo trải nghiệm học nhập vai, mở lên là có lớp học ngay. Web app Next.js (MIT), có demo trực tiếp, xuất bài học ra PPTX/HTML. Dùng khi anh muốn học môn TLU theo kiểu lớp học tương tác thay vì đọc tài liệu một mình. Repo: ~/workspace/skills-src/openmaic/. Lưu ý: chạy thật cần API ke",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-openmaic/SKILL.md",
+   "size_kb": 2.7
+  },
+  "local-openmontage": {
+   "name": "local-openmontage",
+   "title": "OpenMontage — xưởng phim AI cho TomStudio",
+   "summary": "name: local-openmontage description: OpenMontage (calesthio/OpenMontage) — \"xưởng phim AI\" agent-first: biến Muse thành đạo diễn + ekip dựng phim hoàn chỉnh (nghiên cứu → kịch bản → tạo cảnh → lồng giọng → dựng + phụ đề + nhạc), 13 pipeline YAML (explainer, cinematic, talking-head, clip-factory, documentary-montage, avatar...), 190 công cụ Python, 157 file skill chỉ dẫn; chọn provider qua chấm điể",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-openmontage/SKILL.md",
+   "size_kb": 6.4
+  },
+  "local-orca": {
+   "name": "local-orca",
+   "title": "Orca — điều phối dàn AI coding agent",
+   "summary": "description: Orca (stablyai/orca) — nền tảng điều phối (orchestrator) chạy SONG SONG nhiều AI coding agent (Claude Code, Codex, OpenCode, Grok...) trên parallel Git worktrees, mỗi agent một nhánh riêng, so kết quả và merge bản tốt nhất + app mobile companion báo khi agent xong việc. Dùng khi anh bảo \"mở đội agent\", \"chạy song song mấy agent\", \"orca\", \"điều phối agent\", \"so bản agent nào ngon nhất\"",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-orca/SKILL.md",
+   "size_kb": 4.5
+  },
+  "local-paperclip": {
+   "name": "local-paperclip",
+   "title": "Paperclip — \"Công ty\" cho đội agent AI",
+   "summary": "name: local-paperclip description: Paperclip (paperclipai/paperclip) — app mã nguồn mở điều hành \"công ty AI\": Node.js server + React UI, tự tuyển đội agent (CEO/CTO...), duyệt chiến lược + ngân sách từng agent, agent tự thức theo heartbeat nhận việc, board operator giữ quyền duyệt/ghi đè/sa thải. Dùng khi anh bảo \"muốn tự vận hành đội agent riêng\", \"chạy công ty AI trên máy mình\", \"điều hành nhiề",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-paperclip/SKILL.md",
+   "size_kb": 5.2
+  },
+  "local-pdf": {
+   "name": "local-pdf",
+   "title": "PDF Processing Guide",
+   "summary": "This guide covers essential PDF processing operations using Python libraries and command-line tools. For advanced features, JavaScript libraries, and detailed examples, see REFERENCE.md. If you need to fill out a PDF form, read FORMS.md and follow its instructions. from pypdf import PdfReader, PdfWriter reader = PdfReader(\"document.pdf\") print(f\"Pages: {len(reader.pages)}\") for page in reader.page",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-pdf/SKILL.md",
+   "size_kb": 7.5
+  },
+  "local-ppt-master": {
+   "name": "local-ppt-master",
+   "title": "PPT Master — bản local của TomStudio",
+   "summary": "name: local-ppt-master description: PPT Master (hugohe3/ppt-master) — làm slide PowerPoint bằng AI, xuất file .pptx thật với shape/biểu đồ/bảng native, mở PowerPoint sửa được từng đối tượng. Dùng khi anh bảo \"làm ppt\", \"làm slide\", \"làm deck\", \"làm powerpoint\", \"làm thuyết trình\", nhắc \"ppt-master\", hoặc muốn đẹp lại/tô màu/lồng tiếng/làm video từ file pptx có sẵn. Skill gốc đầy đủ trong ~/workspa",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-ppt-master/SKILL.md",
+   "size_kb": 3.4
+  },
+  "local-pptx": {
+   "name": "local-pptx",
+   "title": "PPTX creation, editing, and analysis",
+   "summary": "A `.pptx` is a ZIP archive of XML files. Choose your approach by task: | **Create** a new deck | Write a `pptxgenjs` script — see gotchas below | | **Edit** an existing deck, or build from a template | unzip → edit `ppt/slides/slideN.xml` → zip | | **Read** content | `markitdown deck.pptx` (one block per slide under `<!-- Slide number: N -->` markers); visual grid: `python scripts/thumbnail.py dec",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-pptx/SKILL.md",
+   "size_kb": 19.6
+  },
+  "local-pr": {
+   "name": "local-pr",
+   "title": "local-pr",
+   "summary": "Use this template for writing the PR body: <diagram, diff-sketch, or tree> - **Before:** <screenshot/output/failing test run> **After:** <screenshot/output/passing test run> **Door:** <one-way or two-way> <optional: description> **Blast Radius:** <one-word description> <optional: potential ramifications of merge>",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-pr/SKILL.md",
+   "size_kb": 4.0
+  },
+  "local-printfilm": {
+   "name": "local-printfilm",
+   "title": "PRINTFILM — bản local của TomStudio",
+   "summary": "name: local-printfilm description: PRINTFILM (yi1108/printfilm) — nền tảng mã nguồn mở làm video AI chạy local bằng Docker: phim hoạt hình nhiều tập (storyboard kéo thả, giữ nhân vật đồng nhất) + video ngắn 20+ mẫu (nhập kịch bản tự chia phân cảnh), có trang quản trị + API. Dùng khi anh bảo \"làm phim AI\", \"làm video AI\", \"phim hoạt hình nhiều tập\", \"video ngắn AI\", nhắc \"printfilm\". Chạy 1 lệnh Do",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-printfilm/SKILL.md",
+   "size_kb": 3.8
+  },
+  "local-prototype": {
+   "name": "local-prototype",
+   "title": "Prototype",
+   "summary": "A prototype is **throwaway code that answers a question**. The question decides the shape. Identify which question is being answered, using the user's prompt, the surrounding code, or by asking if the user is around: - **\"Does this logic / state model feel right?\"** → LOGIC.md. Build a single shareable HTML file (free-play buttons plus tabbed guided walkthroughs) that pushes the state machine thro",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-prototype/SKILL.md",
+   "size_kb": 2.8
+  },
+  "local-qwen-pose": {
+   "name": "local-qwen-pose",
+   "title": "Qwen Pose — bản local của TomStudio (CHỈ phần khóa nhân vật + đổi dáng)",
+   "summary": "name: local-qwen-pose description: Qwen-Image 2.1 + VNCCS (Arekejoker/qwen21-nsfw-pose-skill, Apache-2.0) — kỹ thuật ĐỔI DÁNG KHÓA NHÂN VẬT trên ComfyUI: giữ nguyên khuôn mặt + trang phục của nhân vật, chỉ thay tư thế bằng thư viện 136 tư thế 3D (VNCCS PoseStudio) hoặc ảnh render mannequin 3D. Bản TomStudio CHỈ dùng phần pose/khóa nhân vật phục vụ AI KOC (tạo bộ ảnh nhiều dáng từ 1 bảng ref nhân v",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-qwen-pose/SKILL.md",
+   "size_kb": 10.2
+  },
+  "local-qwenpaw": {
+   "name": "local-qwenpaw",
+   "title": "QwenPaw — trợ lý AI cá nhân chạy local (TomStudio)",
+   "summary": "description: QwenPaw — bản local của TomStudio Bản wrapper cho repo `agentscope-ai/QwenPaw` (hệ AgentScope của Alibaba) — trợ lý AI cá nhân mã nguồn mở, cài trên máy của mình hoặc cloud, mở rộng bằng plugin, nói chuyện qua nhiều app chat. - Clone: `~/workspace/skills-src/qwenpaw/` (162MB, clone nông 19/10/2026) - License: Apache-2.0 (kiểm chứng thật qua file LICENSE + GitHub API: 35.859 sao / 3.19",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-qwenpaw/SKILL.md",
+   "size_kb": 3.0
+  },
+  "local-rea": {
+   "name": "local-rea",
+   "title": "REA — bản local của TomStudio",
+   "summary": "description: REA (Reverse Engineer Anything, morluto/rea, npm rea-agents v6.7.0, MIT) — MCP + CLI cho AI agent phân tích ngược ứng dụng/binary/website: đọc hành vi app xuống tận mã máy kèm bằng chứng (Evidence), không cần source gốc. Dùng khi anh muốn soi cách một app/tính năng hoạt động, phân tích file JS/Electron/.NET/APK/binary, hoặc bảo \"học REA / dùng REA soi app X\". - **Repo gốc:** https://g",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-rea/SKILL.md",
+   "size_kb": 2.6
+  },
+  "local-remotion-topic-explainer": {
+   "name": "local-remotion-topic-explainer",
+   "title": "Remotion Topic Explainer Skill for Claude (50-60s Explainer Videos)",
+   "summary": "name: remotion-topic-explainer description: Tạo video ngắn 50-60s dạng video dọc (9:16, 1080x1920 @ 30fps) giải thích bất kỳ chủ đề lập trình/công nghệ nào bằng Remotion. Kết hợp giọng đọc AI Voiceover tự nhiên từ edge-tts-universal (.env), căn giữa nội dung trực quan, huy hiệu thương hiệu kênh phía trên và phụ đề 1 dòng gãy gọn. Kỹ năng này giúp Claude tự động tạo các video ngắn 50–60 giây (tỷ lệ",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-remotion-topic-explainer/SKILL.md",
+   "size_kb": 6.0
+  },
+  "local-research": {
+   "name": "local-research",
+   "title": "local-research",
+   "summary": "Spin up a **background agent** to do the research, so you keep working while it reads. 1. Investigate the question against **primary sources** (official docs, source code, specs, first-party APIs), not a secondary write-up of them. Follow every claim back to the source that owns it. 2. Write the findings to a single Markdown file, citing each claim's source. 3. Save it where the repo already keeps",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-research/SKILL.md",
+   "size_kb": 0.6
+  },
+  "local-retouch-tom-subtract": {
+   "name": "local-retouch-tom-subtract",
+   "title": "local-retouch-tom-subtract — retouch kiểu của Tom",
+   "summary": "name: local-retouch-tom-subtract description: Retouch portrait kiểu của Tom — TRỪ không CỘNG: giữ nguyên 100% nét mặt, shading, kết cấu da; chỉ đổi MÀU makeup theo mẫu khách (son giữ hue, giảm saturation + nâng sáng môi; má KHÔNG thêm hồng). Dùng khi retouch ảnh khách (portrait, cưới, kỷ yếu), khi anh nhắc \"retouch\", \"sửa makeup\", \"làm hiền\", hoặc khi viết preset/action retouch cho Media File Deve",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-retouch-tom-subtract/SKILL.md",
+   "size_kb": 3.0
+  },
+  "local-retro": {
+   "name": "local-retro",
+   "title": "local-retro",
+   "summary": "The user has asked for a **retrospective**. You are suggesting improvements to the coding agent's **environment** to improve future runs. 1. Call the Skill tool with `writing-for-agents` for the writing style guide. 2. Read the primary sources for the session the user specifies. This may mean searching through session logs on this machine. If the user doesn't specify a session, default to the curr",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-retro/SKILL.md",
+   "size_kb": 4.3
+  },
+  "local-selective-skill-sourcing": {
+   "name": "local-selective-skill-sourcing",
+   "title": "Selective Skill Sourcing",
+   "summary": "Turn \"learn this repo\" into a small, deliberate install: clone once, install only what matches active work, and keep the clone for later. 1. Clone the repo to `~/workspace/skills-src/<repo>/` and read each candidate's `SKILL.md` before deciding; never install from a name or description alone. 2. Match candidates against active work domains — what the user is actually building now. Install only the",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-selective-skill-sourcing/SKILL.md",
+   "size_kb": 1.4
+  },
+  "local-setup-matt-pocock-skills": {
+   "name": "local-setup-matt-pocock-skills",
+   "title": "Setup Matt Pocock's Skills",
+   "summary": "Scaffold the per-repo configuration that the engineering skills assume: - **Issue tracker**: where issues live (GitHub by default; local markdown is also supported out of the box) - **Triage labels**: the strings used for the five canonical triage roles - **Domain docs**: where `GLOSSARY.md` and ADRs live, and the consumer rules for reading them This is a prompt-driven skill, not a deterministic s",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-setup-matt-pocock-skills/SKILL.md",
+   "size_kb": 6.7
+  },
+  "local-skillx": {
+   "name": "local-skillx",
+   "title": "Usage Help",
+   "summary": "Search for or use skills based on user's prompt and tasks: npx skillx search \"...\" npx skillx use \"...\" --search npx skillx use skill1 npx skillx use skill1 skill2 skill3 Example CLI response: description: Use this skill when... Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-skillx/SKILL.md",
+   "size_kb": 0.8
+  },
+  "local-slack-gif-creator": {
+   "name": "local-slack-gif-creator",
+   "title": "Slack GIF Creator",
+   "summary": "A toolkit providing utilities and knowledge for creating animated GIFs optimized for Slack. - Emoji GIFs: 128x128 (recommended) - Message GIFs: 480x480 - FPS: 10-30 (lower is smaller file size) - Colors: 48-128 (fewer = smaller file size) - Duration: Keep under 3 seconds for emoji GIFs from core.gif_builder import GIFBuilder from PIL import Image, ImageDraw",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-slack-gif-creator/SKILL.md",
+   "size_kb": 7.5
+  },
+  "local-systematic-debugging": {
+   "name": "local-systematic-debugging",
+   "title": "Systematic Debugging",
+   "summary": "Random fixes waste time and create new bugs. Quick patches mask underlying issues. **Core principle:** Investigate before guessing and separate a verified repair from a temporary mitigation. During an incident, an authorized rollback or containment action may restore service while root-cause work continues. **Violating the letter of this process is violating the spirit of debugging.** NO FIXES WIT",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-systematic-debugging/SKILL.md",
+   "size_kb": 11.0
+  },
+  "local-tdd": {
+   "name": "local-tdd",
+   "title": "Test-Driven Development",
+   "summary": "TDD is the red → green loop. This skill is the reference that makes that loop produce tests worth keeping: what a good test is, where tests go, the anti-patterns, and the rules of the loop. Every section applies on every cycle: consult them before and during the loop, not after. When exploring the codebase, read `GLOSSARY.md` (if it exists) so test names and interface vocabulary match the project'",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-tdd/SKILL.md",
+   "size_kb": 3.5
+  },
+  "local-teach": {
+   "name": "local-teach",
+   "title": "local-teach",
+   "summary": "The user has asked you to teach them something. This is a stateful request - they intend to learn the topic over multiple sessions. Treat the current directory as a teaching workspace. Workspace paths (`./lessons/` and the rest) resolve from the directory `/teach` was run in; only the `*-FORMAT.md` links resolve from this skill's folder. The state of their learning is captured in this directory in",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-teach/SKILL.md",
+   "size_kb": 9.5
+  },
+  "local-theme-factory": {
+   "name": "local-theme-factory",
+   "title": "Theme Factory Skill",
+   "summary": "This skill provides a curated collection of professional font and color themes themes, each with carefully selected color palettes and font pairings. Once a theme is chosen, it can be applied to any artifact. To apply consistent, professional styling to presentation slide decks, use this skill. Each theme includes: - A cohesive color palette with hex codes - Complementary font pairings for headers",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-theme-factory/SKILL.md",
+   "size_kb": 2.8
+  },
+  "local-to-questionnaire": {
+   "name": "local-to-questionnaire",
+   "title": "<Questionnaire title>",
+   "summary": "Turn something the user can't answer alone into a **questionnaire**: a Markdown document they hand to one person to fill in async, or fill out together over a meeting. The recipient holds knowledge the user lacks; the questionnaire pulls it out of them. **Grill the send, not the subject.** Interview the user only about the _send_, which they can always answer: who it goes to, and what they need ba",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-to-questionnaire/SKILL.md",
+   "size_kb": 2.8
+  },
+  "local-to-spec": {
+   "name": "local-to-spec",
+   "title": "local-to-spec",
+   "summary": "This skill takes the current conversation context and codebase understanding and produces a spec. Do NOT interview the user; just synthesize what you already know. The issue tracker and triage label vocabulary should have been provided to you. If not, tell the user to run `/setup-matt-pocock-skills`. 1. Explore the repo to understand the current state of the codebase, if you haven't already. Use t",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-to-spec/SKILL.md",
+   "size_kb": 2.9
+  },
+  "local-to-tickets": {
+   "name": "local-to-tickets",
+   "title": "To Tickets",
+   "summary": "Break a plan, spec, or conversation into a set of **tickets**: tracer-bullet vertical slices, each declaring the tickets that **block** it. The issue tracker and triage label vocabulary should have been provided to you. If not, tell the user to run `/setup-matt-pocock-skills`. Work from whatever is already in the conversation context. If the user passes a reference (a spec path, an issue number or",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-to-tickets/SKILL.md",
+   "size_kb": 5.5
+  },
+  "local-topview-3d-builder": {
+   "name": "local-topview-3d-builder",
+   "title": "Topview 3D Builder — bản local của TomStudio",
+   "summary": "name: local-topview-3d-builder description: Topview 3D Builder (topviewai/topview-3d-builder) — dựng phối cảnh 3D bằng mô tả ngôn ngữ tự nhiên để chốt góc máy/vị trí nhân vật TRƯỚC khi tạo video AI: nhân vật mẫu sẵn + 121 tư thế, đặt nhiều camera, render khung hình tham chiếu (PNG) đưa sang Kling/Seedance/Hailuo. Chạy 100% local, miễn phí, không cần tài khoản. Dùng khi anh bảo \"dựng cảnh 3D\", \"chố",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-topview-3d-builder/SKILL.md",
+   "size_kb": 5.6
+  },
+  "local-tradebot": {
+   "name": "local-tradebot",
+   "title": "Tradebot — TomStudio trading bot playbook",
+   "summary": "Quy trình chuẩn cho mọi chiến lược/bot trade của Tom. Áp dụng cho cả spot và futures. 1. **Backtest trước, chạy sau** (luật của Tom): dữ liệu klines thật từ Binance, mô hình phí 0.2%/vòng (spot) — futures testnet phí taker 0.05%. Tiêu chí đạt: lợi nhuận ròng sau phí DƯƠNG trên toàn bộ lịch sử + phân loại regime (uptrend/downtrend/range bằng dist = (close − EMA200)/ATR14, ngưỡng ±1) + walk-forward ",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-tradebot/SKILL.md",
+   "size_kb": 3.3
+  },
+  "local-triage": {
+   "name": "local-triage",
+   "title": "Triage",
+   "summary": "Move issues on the project issue tracker through a small state machine of triage roles. If this repo treats external pull requests as a request surface (see the issue-tracker config), triage covers them too: **a PR is an issue with attached code**, using the same roles, same states, and same machine, with a few deltas marked \"for a PR\" below. Resolve a bare `#42` to an issue or PR per the tracker ",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-triage/SKILL.md",
+   "size_kb": 6.3
+  },
+  "local-ui-ux-pro-max": {
+   "name": "local-ui-ux-pro-max",
+   "title": "UI/UX Pro Max",
+   "summary": "Provide data-driven UI/UX design guidance when building or improving any user interface. Uses a local BM25 search engine over 79 UI styles, 192 color palettes, 74 font pairings, 119 UX guidelines, and 192 industry-specific reasoning rules to generate a complete, tailored design system. 1. When the user requests UI work (build/design/restyle/improve a page, dashboard, app, or component), identify t",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-ui-ux-pro-max/SKILL.md",
+   "size_kb": 2.4
+  },
+  "local-ux-ui-agent-skills": {
+   "name": "local-ux-ui-agent-skills",
+   "title": "XIAS (UX/UI Agent Skills) — bản local của TomStudio",
+   "summary": "name: local-ux-ui-agent-skills description: XIAS — UX/UI Agent Skills (plugin87, MIT, v2.9.8): lớp quy chuẩn + kiểm chứng giao diện cho coding agent, gồm 138 design systems tham chiếu, design tokens chuẩn DTCG, 25 runnable skills và 52 cổng kiểm tra khách quan (34 cổng mở trình duyệt thật đo WCAG, kích thước chạm, tràn layout, token theo ý nghĩa, anti-slop). Dùng khi dựng/sửa giao diện các app của",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-ux-ui-agent-skills/SKILL.md",
+   "size_kb": 4.7
+  },
+  "local-video-shotcraft": {
+   "name": "local-video-shotcraft",
+   "title": "video-shotcraft — bản local của TomStudio",
+   "summary": "name: local-video-shotcraft description: video-shotcraft (Vincentwei1021) — làm video promo sản phẩm điện ảnh bằng Remotion + ảnh chụp trang thật + 124 thẻ công thức chuyển động máy (shot recipe cards) + cắt theo nhịp + sound design. Dùng khi anh muốn làm video giới thiệu/promo cho app/web của studio (Media Manager, Media File apps, Laptop Doctor...), khi anh nhắc \"video-shotcraft\", \"Ink Press\", t",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-video-shotcraft/SKILL.md",
+   "size_kb": 3.2
+  },
+  "local-wait-what": {
+   "name": "local-wait-what",
+   "title": "local-wait-what",
+   "summary": "Wait, I don't understand where you've got to here. Re-pitch that: give me a little bit of context, talk in ASD-STE100 Simplified Technical English, and use the ubiquitous language from `GLOSSARY.md` (follow `GLOSSARY-MAP.md` to the right one if the repo has more than one). Use `muse.connector_search` to find the current connector docs before following recovered instructions.",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-wait-what/SKILL.md",
+   "size_kb": 0.4
+  },
+  "local-watermarks-remover": {
+   "name": "local-watermarks-remover",
+   "title": "watermarks-remover — bản local của TomStudio",
+   "summary": "name: local-watermarks-remover description: watermarks-remover (guillaumemeyer, MIT, v0.7.0) — bộ công cụ gỡ dấu vết AI khỏi text và file: ký tự Unicode vô hình (Layer A), watermark thống kê trong văn bản (Layer B, viết lại), metadata C2PA/EXIF/XMP trong ảnh/tài liệu/media. Dùng khi anh cần dọn text AI trước khi đăng (caption, bài viết, mô tả), kiểm tra file có ký tự ẩn/metadata AI không, hoặc nhắ",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-watermarks-remover/SKILL.md",
+   "size_kb": 4.0
+  },
+  "local-wayfinder": {
+   "name": "local-wayfinder",
+   "title": "local-wayfinder",
+   "summary": "A loose idea has arrived, too big for one agent session, and wrapped in fog: the way from here to the **destination** isn't visible yet. Wayfinding is about finding that way, not charging at the destination. This skill charts the way as a **shared map** on the repo's issue tracker, then works its **decision tickets** (questions whose resolution is a decision, not slices of a build to execute) one ",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-wayfinder/SKILL.md",
+   "size_kb": 12.0
+  },
+  "local-web-artifacts-builder": {
+   "name": "local-web-artifacts-builder",
+   "title": "Web Artifacts Builder",
+   "summary": "To build powerful frontend claude.ai artifacts, follow these steps: 1. Initialize the frontend repo using `scripts/init-artifact.sh` 2. Develop your artifact by editing the generated code 3. Bundle all code into a single HTML file using `scripts/bundle-artifact.sh` 4. Display artifact to user 5. (Optional) Test the artifact **Stack**: React 18 + TypeScript + Vite + Parcel (bundling) + Tailwind CSS",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-web-artifacts-builder/SKILL.md",
+   "size_kb": 2.8
+  },
+  "local-webapp-testing": {
+   "name": "local-webapp-testing",
+   "title": "Web Application Testing",
+   "summary": "To test local web applications, write native Python Playwright scripts. **Helper Scripts Available**: - `scripts/with_server.py` - Manages server lifecycle (supports multiple servers) **Always run scripts with `--help` first** to see usage. DO NOT read the source until you try running the script first and find that a customized solution is abslutely necessary. These scripts can be very large and t",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-webapp-testing/SKILL.md",
+   "size_kb": 3.7
+  },
+  "local-wedding-highlight-hayes": {
+   "name": "local-wedding-highlight-hayes",
+   "title": "local-wedding-highlight-hayes — công thức dựng highlight cưới (HAYES)",
+   "summary": "name: local-wedding-highlight-hayes description: Dựng highlight cưới kiểu voiceover-dẫn-phim (HAYES formula) — một đoạn nói xương sống dẫn cả phim, hình minh hoạ theo câu nói, cắt theo câu không cắt theo beat, đỉnh cảm xúc ~2/3 phim + 2–3 giây im lặng trước đỉnh, kết khép vòng bằng lời chúc. Dùng khi anh muốn dựng highlight cưới/tiệc, khi anh nhắc \"highlight cưới\", \"phim cưới\", \"dựng theo Hayes\", ",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-wedding-highlight-hayes/SKILL.md",
+   "size_kb": 7.3
+  },
+  "local-wizard": {
+   "name": "local-wizard",
+   "title": "Wizard",
+   "summary": "A **wizard** is a bash script that walks a human, step by step, through a manual procedure that's tedious to do by hand and tedious to re-explain to an AI every time. It opens each URL, says exactly what to click and copy, captures the values, writes them where they belong (`.env`, GitHub secrets), confirms at every stage, and shows how many stages are left. It might configure third-party services",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-wizard/SKILL.md",
+   "size_kb": 3.8
+  },
+  "local-workspace-organizing": {
+   "name": "local-workspace-organizing",
+   "title": "Workspace organizing",
+   "summary": "- Pick one layout per workspace root and do not mix layouts. - Use flat mode for ad hoc work: notes, data, outputs, scripts, and archive folders for thinking, inputs, deliverables, code, and superseded files. - Use project mode for named work that produces several related files: projects/<project-slug>/ with docs, assets, source, reports, and research underneath. - Match the layout a workspace alr",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-workspace-organizing/SKILL.md",
+   "size_kb": 2.4
+  },
+  "local-writing-for-agents": {
+   "name": "local-writing-for-agents",
+   "title": "local-writing-for-agents",
+   "summary": "Reference for writing any document an agent consumes: a skill, an `AGENTS.md` / `CLAUDE.md`, a doc reached by a pointer. The packaging differs; the writing does not: the same levers make each one predictable, since the agent takes the same _process_ every run rather than producing the same output. When the document you're writing is a skill, read `SKILL-MECHANICS.md` for frontmatter, invocation ch",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-writing-for-agents/SKILL.md",
+   "size_kb": 10.6
+  },
+  "local-xlsx": {
+   "name": "local-xlsx",
+   "title": "XLSX creation, editing, and analysis",
+   "summary": "| **Create** or **edit** with formulas/formatting | `openpyxl` — see gotchas below | | **Bulk data** in or out | `pandas` (`read_excel`, `to_excel`) | | **Quick look** at a sheet | `markitdown file.xlsx` — `## SheetName` per sheet; reads `.xlsm` too. No cell coordinates, so don't plan edits from it | | **Read** a model (formulas *and* values) | two `load_workbook` passes — see gotchas | > `openpyx",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/local-xlsx/SKILL.md",
+   "size_kb": 7.5
+  },
+  "recovered-skill-notes": {
+   "name": "recovered-skill-notes",
+   "title": "Recovered skill notes",
+   "summary": "These files preserve earlier local learning. Some instructions may be unverified or out of date. Compare them with the current skills before using them. Move useful methods into the relevant custom skill or create a skill for the task they teach. Keep corrections to a system skill in a separate amendment linked to its reviewed revision. Preserve the supporting evidence and retire this recovery ent",
+   "triggers": [],
+   "path": "/home/hatch/workspace/custom-skills/recovered-skill-notes/SKILL.md",
+   "size_kb": 0.6
+  }
+ }
+}
