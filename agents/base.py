@@ -22,6 +22,8 @@ class BaseAgent(ABC):
     capabilities: list = field(default_factory=list) if False else []
     # True = chạy song song được, False = phải chạy nối tiếp
     parallel_safe: bool = True
+    # Số task đồng thời tối đa (slot) — router dùng để giới hạn tải
+    max_slots: int = 2
 
     @abstractmethod
     def run(self, prompt: str, system: Optional[str] = None, timeout: int = 120) -> AgentResult:

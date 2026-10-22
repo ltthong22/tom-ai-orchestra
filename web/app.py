@@ -264,6 +264,8 @@ class H(BaseHTTPRequestHandler):
             self._skills_page(user, q.get("q", [""])[0], q.get("name", [""])[0]); return
         if p == "/settings":
             self._settings(user); return
+        if p == "/api/router":
+            self._api_router(); return
         if p == "/logout":
             destroy_session(self._cookie_token())
             self.send_response(302)
@@ -272,6 +274,21 @@ class H(BaseHTTPRequestHandler):
             self.end_headers()
             return
         self._send(page("404", "<h1>Không tìm thấy</h1>", user=user), 404)
+
+    def _api_router(self):
+        """JSON live status: slots + latency từng agent (kiểu Live activity dashboard)."""
+        import json as _json
+        try:
+            from orchestrator.router import get_router
+            data = {"agents": get_router().all_stats()}
+        except Exception as e:
+            data = {"error": str(e), "agents": []}
+        body = _json.dumps(data, ensure_ascii=False).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def _dashboard(self, user):
         tasks = orch.list_tasks(10)
@@ -298,6 +315,27 @@ class H(BaseHTTPRequestHandler):
 
         self._send(page("Tổng quan",
             f"<h1>📊 Tổng quan</h1>{tok_html}"
+            f"<h2>⚡ Live activity — AI Providers</h2>"
+            f"<div class='card'><div id='router-live' class='muted'>Đang tải...</div></div>"
+            f"""<script>
+            async function loadRouter(){{
+              try{{
+                const r = await fetch('/api/router'); const d = await r.json();
+                const el = document.getElementById('router-live');
+                if(!d.agents || !d.agents.length){{ el.textContent='Chưa có dữ liệu'; return; }}
+                el.innerHTML = d.agents.map(a=>{{
+                  const pct = a.max_slots ? Math.round(a.in_flight/a.max_slots*100) : 0;
+                  const lat = a.avg_ms ? (a.avg_ms>=1000 ? (a.avg_ms/1000).toFixed(1)+'s' : a.avg_ms+'ms') : '—';
+                  const fail = a.calls ? Math.round(a.fails/a.calls*1000)/10+'%' : '—';
+                  return `<div style='margin:.5rem 0;padding:.5rem;border:1px solid var(--border);border-radius:8px'>`
+                    + `<b>${{a.agent}}</b> <span class='muted'>${{a.in_flight}}/${{a.max_slots}} slots · ${{lat}} avg · ${{a.calls}} calls · ${{fail}} failed</span>`
+                    + `<div style='background:var(--border);border-radius:4px;height:6px;margin-top:4px'>`
+                    + `<div style='width:${{pct}}%;height:6px;border-radius:4px;background:var(--accent)'></div></div></div>`;
+                }}).join('');
+              }}catch(e){{ document.getElementById('router-live').textContent='Lỗi tải'; }}
+            }}
+            loadRouter(); setInterval(loadRouter, 5000);
+            </script>"""
             f"<h2>Task gần đây</h2><div class='grid'>{cards}</div>",
             active="/", user=user))
 

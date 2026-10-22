@@ -20,6 +20,12 @@ except Exception:
     _tracker = None
 
 try:
+    from orchestrator.router import get_router
+    _router = get_router()
+except Exception:
+    _router = None
+
+try:
     from skills.loader import suggest_skills
 except Exception:
     def suggest_skills(desc, limit=3):
@@ -104,7 +110,8 @@ class Orchestrator:
     # ---------- Chia việc ----------
     def pick_agent(self, kind: str, prefer: Optional[str] = None) -> str:
         """Chọn agent theo loại việc. Ưu tiên agent được chỉ định.
-        Task đơn giản -> tự động dùng model rẻ (tiết kiệm token)."""
+        Task đơn giản -> tự động dùng model rẻ (tiết kiệm token).
+        Có router -> ưu tiên agent nhanh nhất còn slot trống."""
         if prefer and prefer in list_agents():
             return prefer
         hint = KIND_AGENT_HINT.get(kind, "gemini")
@@ -113,6 +120,18 @@ class Orchestrator:
         if cheap == "gemini-3-flash-preview" and kind in (
                 "summarize", "classify", "extract", "translate", "quick_qa"):
             return "gemini"
+        # Slot routing: nếu agent gợi ý hết slot, tìm agent nhanh nhất còn trống
+        # trong nhóm có cùng năng lực
+        if _router and not _router.has_free_slot(hint):
+            # nhóm thay thế: gemini <-> lmstudio cho việc nhẹ
+            fallbacks = {
+                "gemini": ["lmstudio", "muse"],
+                "lmstudio": ["gemini", "muse"],
+                "muse": ["gemini"],
+            }.get(hint, ["gemini"])
+            alt = _router.pick_fastest([a for a in fallbacks if a in list_agents()])
+            if alt:
+                return alt
         return hint
 
     def suggest_skills_for(self, st: "SubTask", limit: int = 3) -> list:
@@ -140,9 +159,21 @@ class Orchestrator:
             agent = get_agent(agent_name)
         except ValueError as e:
             return {"subtask_id": st.id, "agent": agent_name, "success": False, "error": str(e)}
+        # Slot routing: chờ slot trống trước khi chạy
+        if _router:
+            if not _router.acquire(agent_name, timeout=300):
+                return {"subtask_id": st.id, "agent": agent_name,
+                        "success": False, "error": "Hết slot, chờ quá 5 phút"}
         t0 = time.time()
-        r: AgentResult = agent.run(st.prompt, system=st.system)
+        try:
+            r: AgentResult = agent.run(st.prompt, system=st.system)
+        finally:
+            if _router:
+                _router.release(agent_name)
         ms = int((time.time() - t0) * 1000)
+        # Ghi latency vào router stats
+        if _router:
+            _router.record(agent_name, ms, r.success)
         # Log token usage
         if _tracker:
             meta = r.meta or {}
