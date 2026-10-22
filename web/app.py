@@ -169,6 +169,7 @@ pre{
 
 NAV_ITEMS = [
     ("/", "📊", "Tổng quan"),
+    ("/chat", "💬", "Chat AI"),
     ("/new", "➕", "Giao việc"),
     ("/history", "📜", "Lịch sử"),
     ("/tokens", "🎟️", "Token"),
@@ -266,6 +267,10 @@ class H(BaseHTTPRequestHandler):
             self._settings(user); return
         if p == "/api/router":
             self._api_router(); return
+        if p == "/chat":
+            self._chat_page(user); return
+        if p == "/api/chat/history":
+            self._api_chat_history(); return
         if p == "/logout":
             destroy_session(self._cookie_token())
             self.send_response(302)
@@ -307,7 +312,213 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _dashboard(self, user):
+    # ---------- Chat AI (Messenger-style) ----------
+    def _api_chat_history(self):
+        import json as _json
+        try:
+            from orchestrator.chat import get_history
+            data = {"messages": get_history(50)}
+        except Exception as e:
+            data = {"error": str(e), "messages": []}
+        body = _json.dumps(data, ensure_ascii=False).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _api_chat_send(self, q):
+        """Nhận tin nhắn user -> orchestrator chọn AI -> trả lời."""
+        import json as _json
+        msg = q.get("msg", [""])[0].strip()
+        agent_want = q.get("agent", ["auto"])[0].strip() or "auto"
+        if not msg:
+            body = _json.dumps({"error": "Tin nhắn trống"}).encode()
+        else:
+            try:
+                from orchestrator.chat import save_message
+                from orchestrator.core import SubTask
+                # lưu tin user
+                save_message("user", msg)
+                # chọn agent: auto -> dùng pick_agent, hoặc ép agent cụ thể
+                if agent_want != "auto":
+                    agent_name = agent_want
+                else:
+                    agent_name = orch.pick_agent("quick_qa")
+                st = SubTask(id="st-chat", kind="quick_qa", prompt=msg,
+                             agent_name=agent_name if agent_want != "auto" else None)
+                r = orch._run_subtask(st)
+                agent_used = r.get("agent", agent_name)
+                reply = r["output"] if r["success"] and r["output"] else (
+                    f"⚠️ {agent_used} lỗi: {r.get('error', 'không rõ')}")
+                saved = save_message("ai", reply, agent=agent_used)
+                body = _json.dumps({"ok": True, "message": saved},
+                                   ensure_ascii=False).encode("utf-8")
+            except Exception as e:
+                body = _json.dumps({"error": str(e)}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _chat_page(self, user):
+        self._send(page("Chat AI", """
+<h1>💬 Chat AI</h1>
+<p class="muted">Nhắn như Messenger — mỗi AI có màu + avatar riêng, thấy rõ ai đang trả lời.</p>
+
+<div class="chat-wrap">
+  <div id="chat-msgs" class="chat-msgs"></div>
+  <div id="typing" class="typing" style="display:none">
+    <span class="dot-ava" id="typing-ava">🤖</span>
+    <span class="tdots"><i></i><i></i><i></i></span>
+    <span id="typing-name" class="muted" style="font-size:.8rem"></span>
+  </div>
+  <div class="chat-input">
+    <select id="agent-sel" class="agent-sel">
+      <option value="auto">🤖 Tự động</option>
+      <option value="gemini">🔵 Gemini</option>
+      <option value="muse">🟣 Muse</option>
+      <option value="lmstudio">🟢 LM Studio</option>
+      <option value="deepseek">🔷 DeepSeek</option>
+    </select>
+    <input id="chat-text" type="text" placeholder="Nhắn tin..." autocomplete="off">
+    <button id="chat-send" class="send-btn">➤</button>
+  </div>
+</div>
+
+<style>
+.chat-wrap{max-width:640px;margin:0 auto;display:flex;flex-direction:column;
+  height:calc(100vh - 260px);min-height:380px;background:#0d1117;
+  border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.chat-msgs{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:.6rem}
+.msg{max-width:82%;padding:.6rem .9rem;border-radius:16px;font-size:.92rem;
+  line-height:1.45;word-break:break-word;white-space:pre-wrap}
+.msg.user{align-self:flex-end;background:var(--accent);color:#fff;
+  border-bottom-right-radius:4px}
+.msg.ai{align-self:flex-start;background:#161b22;border:1px solid var(--border);
+  border-bottom-left-radius:4px;color:var(--text)}
+.msg .who{display:flex;align-items:center;gap:.4rem;font-size:.75rem;
+  font-weight:700;margin-bottom:.3rem}
+.ava{width:22px;height:22px;border-radius:99px;display:inline-flex;align-items:center;
+  justify-content:center;font-size:.8rem;flex:0 0 22px}
+.ava.gemini{background:#1a73e8} .ava.muse{background:#7c3aed}
+.ava.lmstudio{background:#16a34a} .ava.deepseek{background:#0ea5e9}
+.ava.claude{background:#ea580c}
+.who.gemini{color:#8ab4f8} .who.muse{color:#c4b5fd}
+.who.lmstudio{color:#86efac} .who.deepseek{color:#7dd3fc} .who.claude{color:#fdba74}
+.msg .time{font-size:.68rem;color:var(--muted);margin-top:.3rem;text-align:right}
+.typing{display:flex;align-items:center;gap:.5rem;padding:.4rem 1rem}
+.dot-ava{width:26px;height:26px;border-radius:99px;background:var(--bg3);
+  display:inline-flex;align-items:center;justify-content:center}
+.tdots i{display:inline-block;width:7px;height:7px;border-radius:99px;
+  background:var(--muted);margin:0 2px;animation:blink 1.2s infinite}
+.tdots i:nth-child(2){animation-delay:.2s} .tdots i:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,100%{opacity:.25}50%{opacity:1}}
+.chat-input{display:flex;gap:.5rem;padding:.7rem;border-top:1px solid var(--border);
+  background:#0d1117;align-items:center}
+.chat-input input{flex:1;background:var(--bg3);border:1px solid var(--border);
+  border-radius:99px;padding:.65rem 1rem;color:var(--text);font-size:.95rem;min-width:0}
+.agent-sel{background:var(--bg3);border:1px solid var(--border);color:var(--text);
+  border-radius:99px;padding:.55rem .6rem;font-size:.85rem;max-width:130px}
+.send-btn{width:44px;height:44px;min-height:44px;border-radius:99px;padding:0;
+  margin:0;flex:0 0 44px;font-size:1.1rem}
+</style>
+
+<script>
+const AGENT_META = {
+  gemini:{label:'Gemini', icon:'🔵', cls:'gemini'},
+  muse:{label:'Muse', icon:'🟣', cls:'muse'},
+  lmstudio:{label:'LM Studio', icon:'🟢', cls:'lmstudio'},
+  deepseek:{label:'DeepSeek', icon:'🔷', cls:'deepseek'},
+  claude:{label:'Claude', icon:'🟠', cls:'claude'},
+};
+const box = document.getElementById('chat-msgs');
+const typing = document.getElementById('typing');
+let lastId = '';
+
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function renderMsg(m){
+  const div = document.createElement('div');
+  if(m.role === 'user'){
+    div.className = 'msg user';
+    div.innerHTML = esc(m.content) + `<div class="time">${(m.created_at||'').slice(11,16)}</div>`;
+  } else {
+    const meta = AGENT_META[m.agent] || {label:m.agent||'AI', icon:'🤖', cls:'muse'};
+    div.className = 'msg ai';
+    div.innerHTML = `<div class="who ${meta.cls}"><span class="ava ${meta.cls}">${meta.icon}</span>${meta.label}</div>`
+      + esc(m.content) + `<div class="time">${(m.created_at||'').slice(11,16)}</div>`;
+  }
+  div.dataset.id = m.id;
+  return div;
+}
+
+async function loadHistory(){
+  try{
+    const r = await fetch('/api/chat/history');
+    const d = await r.json();
+    box.innerHTML = '';
+    (d.messages||[]).forEach(m=>{ box.appendChild(renderMsg(m)); lastId = m.id; });
+    box.scrollTop = box.scrollHeight;
+  }catch(e){}
+}
+
+async function send(){
+  const inp = document.getElementById('chat-text');
+  const text = inp.value.trim();
+  if(!text) return;
+  const agent = document.getElementById('agent-sel').value;
+  inp.value = '';
+  // hiện tin user ngay
+  box.appendChild(renderMsg({id:'tmp', role:'user', content:text, created_at:new Date().toISOString()}));
+  box.scrollTop = box.scrollHeight;
+  // hiện typing
+  const meta = agent==='auto' ? {label:'AI', icon:'🤖'} : AGENT_META[agent];
+  document.getElementById('typing-ava').textContent = meta.icon;
+  document.getElementById('typing-name').textContent = agent==='auto' ? 'AI đang nghĩ...' : meta.label + ' đang nhập...';
+  typing.style.display = 'flex';
+  box.scrollTop = box.scrollHeight;
+  try{
+    const r = await fetch('/api/chat/send', {
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:'msg='+encodeURIComponent(text)+'&agent='+encodeURIComponent(agent),
+    });
+    const d = await r.json();
+    typing.style.display = 'none';
+    if(d.message){
+      box.appendChild(renderMsg(d.message));
+      box.scrollTop = box.scrollHeight;
+    } else if(d.error){
+      box.appendChild(renderMsg({id:'e', role:'ai', agent:'muse', content:'⚠️ '+d.error, created_at:''}));
+    }
+  }catch(e){
+    typing.style.display = 'none';
+  }
+}
+
+document.getElementById('chat-send').onclick = send;
+document.getElementById('chat-text').addEventListener('keydown', e=>{
+  if(e.key === 'Enter') send();
+});
+loadHistory();
+setInterval(async ()=>{
+  // poll tin mới (đơn giản: reload nếu có tin lạ)
+  try{
+    const r = await fetch('/api/chat/history');
+    const d = await r.json();
+    const msgs = d.messages||[];
+    if(msgs.length && msgs[msgs.length-1].id !== lastId){
+      const seen = new Set([...box.children].map(c=>c.dataset.id));
+      msgs.forEach(m=>{ if(!seen.has(m.id)){ box.appendChild(renderMsg(m)); } });
+      lastId = msgs[msgs.length-1].id;
+      box.scrollTop = box.scrollHeight;
+    }
+  }catch(e){}
+}, 3000);
+</script>
+""", active="/chat", user=user))
         tasks = orch.list_tasks(10)
         cards = ""
         for t in tasks:
@@ -672,6 +883,8 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
             self.end_headers()
             return
 
+        if p == "/api/chat/send":
+            self._api_chat_send(q); return
         if p == "/run":
             title = q.get("title", ["Task"])[0].strip() or "Task"
             raw = q.get("subs", [""])[0]
