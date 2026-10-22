@@ -51,10 +51,13 @@ class Task:
 
 # Gợi ý chọn agent theo loại việc (có thể override bằng agent_name)
 KIND_AGENT_HINT = {
-    "code": "claude",
-    "reasoning": "claude",
-    "decide": "claude",
-    "plan": "claude",
+    "code": "muse",          # việc khó → Muse (chat chính) xử lý
+    "reasoning": "muse",
+    "decide": "muse",
+    "plan": "muse",
+    "browse": "muse",        # thao tác web → Muse
+    "execute": "muse",       # chạy lệnh/máy → Muse
+    "orchestrate": "muse",
     "summarize": "gemini",
     "classify": "gemini",
     "extract": "gemini",
