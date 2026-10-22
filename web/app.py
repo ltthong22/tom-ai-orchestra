@@ -276,13 +276,30 @@ class H(BaseHTTPRequestHandler):
         self._send(page("404", "<h1>Không tìm thấy</h1>", user=user), 404)
 
     def _api_router(self):
-        """JSON live status: slots + latency từng agent (kiểu Live activity dashboard)."""
+        """JSON live status: slots + latency từng agent, task queue, kinds."""
         import json as _json
         try:
             from orchestrator.router import get_router
-            data = {"agents": get_router().all_stats()}
+            agents = get_router().all_stats()
         except Exception as e:
-            data = {"error": str(e), "agents": []}
+            agents = []
+        # task stats: đếm theo status + kind đang chạy
+        try:
+            tasks = orch.list_tasks(50)
+            by_status = {}
+            for t in tasks:
+                by_status[t["status"]] = by_status.get(t["status"], 0) + 1
+        except Exception:
+            by_status = {}
+        # in-flight per agent từ router
+        in_flight_total = sum(a.get("in_flight", 0) for a in agents)
+        calls_per_min = sum(a.get("calls", 0) for a in agents)
+        data = {
+            "agents": agents,
+            "tasks_by_status": by_status,
+            "in_flight": in_flight_total,
+            "total_calls": calls_per_min,
+        }
         body = _json.dumps(data, ensure_ascii=False).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -301,42 +318,160 @@ class H(BaseHTTPRequestHandler):
         if not cards:
             cards = "<div class='card'><p class='muted'>Chưa có task nào. <a href='/new' style='color:var(--accent)'>Giao việc mới →</a></p></div>"
 
-        # token summary mini
-        tok_html = ""
-        if _tracker:
-            tot = _tracker.total()
-            by = _tracker.summary_by_agent(7)
-            top = by[0] if by else None
-            tok_html = (f"<div class='grid cols3'>"
-                        f"<div class='card'><div class='stat'>{fmt_num(tot['input']+tot['output'])}<small> tokens</small></div><p class='muted'>Tổng đã dùng</p></div>"
-                        f"<div class='card'><div class='stat'>{tot['calls']}<small> calls</small></div><p class='muted'>API calls</p></div>"
-                        f"<div class='card'><div class='stat' style='font-size:1.2rem'>{(top['agent'] if top else '—')}</div><p class='muted'>AI dùng nhiều nhất (7 ngày)</p></div>"
-                        f"</div>")
+        self._send(page("Tổng quan", f"""
+<h1 style="display:flex;align-items:center;gap:.5rem">
+<span style="color:var(--accent)">↗</span> Live activity
+<span id="live-stats" class="muted" style="margin-left:auto;font-size:.85rem;font-weight:400"></span>
+</h1>
 
-        self._send(page("Tổng quan",
-            f"<h1>📊 Tổng quan</h1>{tok_html}"
-            f"<h2>⚡ Live activity — AI Providers</h2>"
-            f"<div class='card'><div id='router-live' class='muted'>Đang tải...</div></div>"
-            f"""<script>
-            async function loadRouter(){{
-              try{{
-                const r = await fetch('/api/router'); const d = await r.json();
-                const el = document.getElementById('router-live');
-                if(!d.agents || !d.agents.length){{ el.textContent='Chưa có dữ liệu'; return; }}
-                el.innerHTML = d.agents.map(a=>{{
-                  const pct = a.max_slots ? Math.round(a.in_flight/a.max_slots*100) : 0;
-                  const lat = a.avg_ms ? (a.avg_ms>=1000 ? (a.avg_ms/1000).toFixed(1)+'s' : a.avg_ms+'ms') : '—';
-                  const fail = a.calls ? Math.round(a.fails/a.calls*1000)/10+'%' : '—';
-                  return `<div style='margin:.5rem 0;padding:.5rem;border:1px solid var(--border);border-radius:8px'>`
-                    + `<b>${{a.agent}}</b> <span class='muted'>${{a.in_flight}}/${{a.max_slots}} slots · ${{lat}} avg · ${{a.calls}} calls · ${{fail}} failed</span>`
-                    + `<div style='background:var(--border);border-radius:4px;height:6px;margin-top:4px'>`
-                    + `<div style='width:${{pct}}%;height:6px;border-radius:4px;background:var(--accent)'></div></div></div>`;
-                }}).join('');
-              }}catch(e){{ document.getElementById('router-live').textContent='Lỗi tải'; }}
-            }}
-            loadRouter(); setInterval(loadRouter, 5000);
-            </script>"""
-            f"<h2>Task gần đây</h2><div class='grid'>{cards}</div>",
+<div class="live-wrap">
+<svg id="flow-svg" class="flow-svg" preserveAspectRatio="none"></svg>
+<div class="live-cols">
+  <div class="live-col">
+    <div class="live-head">WORK</div>
+    <div id="work-cards"></div>
+  </div>
+  <div class="live-col">
+    <div class="live-head">AI FEATURES</div>
+    <div id="kind-cards"></div>
+  </div>
+  <div class="live-col">
+    <div class="live-head">MACHINES &amp; PROVIDERS</div>
+    <div id="agent-cards"></div>
+  </div>
+</div>
+</div>
+
+<h2 style="margin-top:1.5rem">Task gần đây</h2>
+<div class="grid">{cards}</div>
+<div style="margin:1rem 0"><a href="/new" class="btn">➕ Giao việc mới</a></div>
+
+<style>
+.live-wrap{{position:relative;background:#0d1117;border:1px solid var(--border);
+  border-radius:16px;padding:1.2rem .8rem;overflow:hidden;margin:1rem 0}}
+.flow-svg{{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}}
+.live-cols{{position:relative;z-index:1;display:grid;grid-template-columns:1fr;gap:1rem}}
+@media(min-width:768px){{.live-cols{{grid-template-columns:1fr 1.2fr 1.2fr}}}}
+.live-head{{font-size:.75rem;letter-spacing:.12em;color:var(--muted);margin-bottom:.6rem}}
+.live-card{{background:#161b22;border:1px solid var(--border);border-radius:12px;
+  padding:.8rem .9rem;margin-bottom:.7rem;position:relative;transition:border-color .3s}}
+.live-card.active{{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}}
+.live-card .t{{font-weight:600;font-size:.95rem;display:flex;align-items:center;gap:.5rem}}
+.live-card .s{{font-size:.8rem;color:var(--muted);margin-top:.25rem}}
+.live-card .badge-n{{position:absolute;top:-8px;right:-8px;background:var(--accent);color:#fff;
+  font-size:.75rem;font-weight:700;min-width:22px;height:22px;border-radius:99px;
+  display:flex;align-items:center;justify-content:center;padding:0 6px}}
+.slotbar{{height:5px;background:var(--bg3);border-radius:99px;margin-top:.5rem;overflow:hidden}}
+.slotbar i{{display:block;height:100%;border-radius:99px;background:var(--accent);transition:width .5s}}
+.dot{{width:9px;height:9px;border-radius:99px;display:inline-block;flex:0 0 9px}}
+.dot.g{{background:#3fb950}} .dot.y{{background:#d29922}} .dot.r{{background:#f85149}} .dot.b{{background:#58a6ff}}
+.flow-line{{fill:none;stroke-width:2;opacity:.55}}
+.flow-line.hot{{stroke:#a371f7;stroke-dasharray:6 6;animation:dash 1s linear infinite}}
+.flow-line.warm{{stroke:#d29922;stroke-dasharray:5 7;opacity:.4}}
+.flow-line.cold{{stroke:#484f58;opacity:.25}}
+.flow-line.fast{{stroke:#58a6ff;opacity:.5}}
+@keyframes dash{{to{{stroke-dashoffset:-24}}}}
+.flow-lbl{{font-size:11px;fill:var(--muted)}}
+</style>
+
+<script>
+const KIND_ICON = {{"summarize":"📝","classify":"🏷️","code":"💻","reasoning":"🧠","verify":"✅",
+  "extract":"📤","translate":"🌐","quick_qa":"💬","plan":"📋","decide":"🎯","browse":"🌐","execute":"⚙️","orchestrate":"🎼"}};
+const AGENT_COLOR = {{"gemini":"b","lmstudio":"g","muse":"y","deepseek":"r","claude":"b"}};
+const AGENT_LABEL = {{"gemini":"Gemini","lmstudio":"LM Studio","muse":"Muse","deepseek":"DeepSeek","claude":"Claude"}};
+
+async function loadLive(){{
+  try{{
+    const r = await fetch('/api/router'); const d = await r.json();
+    const agents = d.agents || [];
+    const inFlight = d.in_flight || 0;
+    const totalCalls = d.total_calls || 0;
+    const hosts = agents.length;
+
+    // header stats
+    let failed = 0, calls = 0;
+    agents.forEach(a=>{{ failed += a.fails||0; calls += a.calls||0; }});
+    const failPct = calls ? (failed/calls*100).toFixed(1) : '0';
+    document.getElementById('live-stats').textContent =
+      `${{hosts}} hosts · ${{inFlight}} in flight · ${{calls}} calls · ${{failPct}}% failed`;
+
+    // WORK column: task queue
+    const st = d.tasks_by_status || {{}};
+    const pending = st.pending||0, running = st.running||0;
+    document.getElementById('work-cards').innerHTML =
+      `<div class="live-card ${{running?'active':''}}">`
+      + `<div class="t">📚 Task Queue</div>`
+      + `<div class="s">${{running}} đang chạy · ${{pending}} chờ</div></div>`;
+
+    // AI FEATURES: kinds từ agent stats (tạm dùng agents làm features)
+    // -> hiển thị theo kind phổ biến: lấy từ tasks gần đây thì cần API khác, tạm hardcode các kind chính
+    const kinds = [
+      {{k:'summarize', label:'Summarize & Classify'}},
+      {{k:'code', label:'Code & Reasoning'}},
+      {{k:'verify', label:'Verify'}},
+    ];
+    document.getElementById('kind-cards').innerHTML = kinds.map((kd,i)=>{{
+      const active = inFlight>0 && i===1;
+      return `<div class="live-card ${{active?'active':''}}" data-kind="${{kd.k}}">`
+        + `<div class="t">${{KIND_ICON[kd.k]||'⚡'}} ${{kd.label}}</div>`
+        + `<div class="s">${{active? inFlight+' in flight' : 'idle'}}</div>`
+        + (active?`<span class="badge-n">${{inFlight}}</span>`:'')
+        + `</div>`;
+    }}).join('');
+
+    // MACHINES & PROVIDERS
+    const order = ['gemini','lmstudio','muse','deepseek','claude'];
+    const sorted = agents.slice().sort((a,b)=> order.indexOf(a.agent)-order.indexOf(b.agent));
+    document.getElementById('agent-cards').innerHTML = sorted.map(a=>{{
+      const pct = a.max_slots ? Math.round(a.in_flight/a.max_slots*100) : 0;
+      const lat = a.avg_ms ? (a.avg_ms>=1000 ? (a.avg_ms/1000).toFixed(1)+' s' : a.avg_ms+' ms') : '—';
+      const dot = a.in_flight>0 ? 'g' : (a.calls>0 ? 'y' : 'b');
+      const col = AGENT_COLOR[a.agent]||'b';
+      return `<div class="live-card ${{a.in_flight>0?'active':''}}" data-agent="${{a.agent}}">`
+        + `<div class="t"><span class="dot ${{dot}}"></span> ${{AGENT_LABEL[a.agent]||a.agent}}</div>`
+        + `<div class="s">${{a.in_flight}}/${{a.max_slots}} slots · ${{lat}}</div>`
+        + `<div class="slotbar"><i style="width:${{pct}}%"></i></div></div>`;
+    }}).join('');
+
+    drawFlows(agents);
+  }}catch(e){{}}
+}}
+
+function drawFlows(agents){{
+  const svg = document.getElementById('flow-svg');
+  const wrap = svg.parentElement;
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+  svg.setAttribute('viewBox', `0 0 ${{W}} ${{H}}`);
+  const workEl = document.querySelector('#work-cards .live-card');
+  const kindEls = document.querySelectorAll('#kind-cards .live-card');
+  const agentEls = document.querySelectorAll('#agent-cards .live-card');
+  if(!workEl || !kindEls.length || !agentEls.length) return;
+  const wr = wrap.getBoundingClientRect();
+  const cx = el => {{ const r = el.getBoundingClientRect();
+    return {{x: r.left - wr.left + r.width/2, y: r.top - wr.top + r.height/2, w: r.width}}; }};
+  const wp = cx(workEl);
+  let html = '';
+  kindEls.forEach((ke,ki)=>{{
+    const kp = cx(ke);
+    // work -> kind
+    const hot = ke.classList.contains('active');
+    html += `<path class="flow-line ${{hot?'hot':'cold'}}" d="M ${{wp.x+wp.w/2}} ${{wp.y}} C ${{wp.x+wp.w/2+60}} ${{wp.y}}, ${{kp.x-kp.w/2-60}} ${{kp.y}}, ${{kp.x-kp.w/2}} ${{kp.y}}"/>`;
+    // kind -> agents (round-robin theo index)
+    agentEls.forEach((ae,ai)=>{{
+      if((ki+ai)%2!==0) return;
+      const ap = cx(ae);
+      const busy = ae.classList.contains('active');
+      const cls = busy ? 'warm' : (ai===0 ? 'fast' : 'cold');
+      html += `<path class="flow-line ${{cls}}" d="M ${{kp.x+kp.w/2}} ${{kp.y}} C ${{kp.x+kp.w/2+60}} ${{kp.y}}, ${{ap.x-ap.w/2-60}} ${{ap.y}}, ${{ap.x-ap.w/2-60}} ${{ap.y}}"/>`;
+    }});
+  }});
+  svg.innerHTML = html;
+}}
+
+loadLive(); setInterval(loadLive, 4000);
+window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
+</script>
+""",
             active="/", user=user))
 
     def _new_form(self, user):
