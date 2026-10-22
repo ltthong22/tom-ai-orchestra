@@ -1,0 +1,2 @@
+# Tom AI Orchestra chi dung thu vien chuan Python (stdlib), khong can package ngoai.
+# File nay giup Railway/Railpack nhan dien day la ung dung Python de build.
