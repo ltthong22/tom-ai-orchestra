@@ -67,7 +67,7 @@ def check_deepseek():
             headers={"Authorization": f"Bearer {key}"})
         with urllib.request.urlopen(req, timeout=10) as r:
             if r.status == 200:
-                return True, "Key hợp lệ (số dư $0 — cần nạp tiền để dùng)"
+                return True, "Key hợp lệ, đã có số dư"
     except Exception as e:
         return False, f"Key không hợp lệ: {e}"
     return True, "Key hợp lệ"

@@ -209,6 +209,7 @@ NAV_ITEMS = [
     ("/history", "📜", "Lịch sử"),
     ("/tokens", "🎟️", "Token Usage"),
     ("/ai-office", "🏢", "Văn Phòng AI"),
+    ("/ai-office-3d", "🌐", "VP 3D"),
     ("/skills", "🧠", "Skills"),
     ("/settings", "⚙️", "Cài đặt"),
 ]
@@ -335,6 +336,8 @@ class H(BaseHTTPRequestHandler):
             self._tokens_page(user, q); return
         if p == "/ai-office":
             self._ai_office(user); return
+        if p == "/ai-office-3d":
+            self._ai_office_3d(user); return
         if p == "/accounting-room":
             self.send_response(302)
             self.send_header("Location", "/ai-office")
@@ -346,6 +349,8 @@ class H(BaseHTTPRequestHandler):
             self._settings(user); return
         if p == "/api/router":
             self._api_router(); return
+        if p == "/api/office3d/state":
+            self._api_office3d_state(); return
         if p == "/chat":
             self._chat_page(user); return
         if p == "/api/chat/history":
@@ -1247,6 +1252,644 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
                 f"<div class='ar-room'>{''.join(desks)}</div>"
                 f"<script>setTimeout(()=>location.reload(),30000)</script>")
         self._send(page("Phòng Kế Toán AI", body, active="/accounting-room", user=user))
+
+    def _office3d_state_data(self):
+        """Dữ liệu live cho Văn Phòng 3D: agents, finance, tokens, EC, drives."""
+        import json as _j, os as _o
+        AG = [
+            ("gemini", "\U0001F98A", "Gemini", "#4aa8ff",
+             "\U0001F4CA Phân tích chi tiêu", "ketoan"),
+            ("muse", "\U0001F989", "Muse", "#b07bff",
+             "✅ Điều phối + Duyệt chi", "dieuhanh"),
+            ("deepseek", "\U0001F988", "DeepSeek", "#39c5ff",
+             "\U0001F50D Soi công nợ", "dulieu"),
+            ("claude", "\U0001F42F", "Claude", "#ff9f43",
+             "\U0001F4DD Lập báo cáo", "marketing"),
+            ("lmstudio", "\U0001F438", "LM Studio", "#3ddc84",
+             "⚡ Trả lời nhanh", "app"),
+        ]
+        rs = {}
+        try:
+            from orchestrator.router import get_router
+            for s in get_router().all_stats():
+                rs[s["agent"]] = s
+        except Exception:
+            pass
+        rpg = {}
+        try:
+            _rp = _o.path.join(_o.path.dirname(_o.path.dirname(
+                _o.path.abspath(__file__))), "data", "agent_rpg.json")
+            rpg = _j.load(open(_rp, encoding="utf-8"))
+        except Exception:
+            pass
+        tok = {}
+        try:
+            from data_providers.token_stats import get_stats
+            for days in (1, 7, 30):
+                s = get_stats(days)
+                for a, v in s.get("by_ai", {}).items():
+                    tok.setdefault(a, {})[days] = {
+                        "tokens": v["in"] + v["out"],
+                        "calls": v["calls"],
+                        "cost": round(v.get("cost_usd", 0), 4),
+                    }
+        except Exception:
+            pass
+        agents = []
+        for key, char, name, color, role, dept in AG:
+            st = rs.get(key, {})
+            inflight = st.get("in_flight", 0)
+            calls = st.get("calls", 0)
+            fails = st.get("fails", 0)
+            ok = round((calls - fails) * 100 / calls, 1) if calls else 100.0
+            if inflight > 0:
+                status = "busy"
+            elif calls and fails * 2 >= calls:
+                status = "error"
+            elif st.get("updated_at"):
+                status = "ready"
+            else:
+                status = "stale"
+            rd = rpg.get("agents", {}).get(key, {})
+            agents.append({
+                "key": key, "char": char, "name": name, "color": color,
+                "role": role, "dept": dept, "status": status,
+                "in_flight": inflight, "rank": rd.get("rank", 1),
+                "ok_rate": ok, "calls": calls,
+                "tokens": tok.get(key, {}),
+            })
+        fin = {}
+        try:
+            from data_providers.finance_data import fetch_dashboard, is_configured
+            if is_configured():
+                d = fetch_dashboard()
+                if d:
+                    fin = d.get("stats", {})
+        except Exception:
+            pass
+        drives = {}
+        try:
+            _c = "/tmp/ofc-drive-cache.json"
+            if _o.path.exists(_c):
+                drives = _j.load(open(_c, encoding="utf-8"))
+        except Exception:
+            pass
+        ec = [
+            {"id": "B1", "char": "\U0001F422", "name": "INSTA 360 (81GB)",
+             "route": "G: → J:", "status": "done", "pct": 100,
+             "detail": "81GB → J: xong"},
+            {"id": "B2", "char": "\U0001F41C", "name": "Work (70GB)",
+             "route": "G: → H:\\Work-G-temp", "status": "run", "pct": -1,
+             "detail": "đang sync…"},
+            {"id": "B3", "char": "\U0001F9A5", "name": "Vertex/Pic/Fonts/2023 (26GB)",
+             "route": "G: → H:", "status": "wait", "pct": 0,
+             "detail": "chờ B2 xong"},
+            {"id": "B4", "char": "\U0001F9A3", "name": "EC Team (295GB)",
+             "route": "H: → G:", "status": "wait", "pct": 0,
+             "detail": "chờ B3 xong"},
+        ]
+        rep = rpg.get("company", {}).get("reputation", 82)
+        avg_ok = (round(sum(a["ok_rate"] for a in agents) / len(agents), 1)
+                  if agents else 100.0)
+        return {"agents": agents, "finance": fin, "ec": ec,
+                "drives": drives,
+                "company": {"reputation": rep, "avg_ok": avg_ok}}
+
+    def _api_office3d_state(self):
+        """JSON live cho Văn Phòng 3D (poll 15/30/60s)."""
+        import json as _j
+        body = _j.dumps(self._office3d_state_data(),
+                        ensure_ascii=False).encode("utf-8")
+        self._send(body, 200, "application/json; charset=utf-8")
+
+
+    def _ai_office_3d(self, user):
+        """🌐 Văn Phòng AI 3D — nhân vật di chuyển, tất cả trong 1 màn hình."""
+        import json as _j, html as _h
+        state = self._office3d_state_data()
+        state_json = _j.dumps(state, ensure_ascii=False)
+        csrf = self._csrf_token() or ""
+        body = """<!DOCTYPE html>
+<html lang="vi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Văn Phòng AI 3D — Tom AI Orchestra</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:#070b12;color:#e8eef5;
+ font-family:'Segoe UI',system-ui,Arial,sans-serif;font-size:13px}
+#scene{position:fixed;inset:0}
+#scene canvas{display:block}
+.hud{position:fixed;z-index:10;pointer-events:none}
+.hud .card{pointer-events:auto;background:rgba(13,20,32,.82);border:1px solid #223148;
+ border-radius:12px;padding:10px 12px;backdrop-filter:blur(8px);
+ box-shadow:0 4px 18px rgba(0,0,0,.45)}
+#hud-top{top:10px;left:10px;right:10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+#hud-top .title{font-size:16px;font-weight:700;white-space:nowrap}
+#hud-top .stats{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#9fb2c8}
+#hud-top .stats b{color:#fff}
+#hud-top .navlinks{margin-left:auto;display:flex;gap:8px}
+#hud-top .navlinks a{color:#7cc4ff;text-decoration:none;font-size:12px;
+ border:1px solid #2a3d5c;border-radius:16px;padding:4px 12px;background:rgba(20,32,52,.7)}
+#ec-strip{display:flex;gap:8px;align-items:center;font-size:12px}
+.ec-mini{padding:3px 10px;border-radius:14px;font-weight:600;white-space:nowrap}
+.ec-done{background:#14532d;color:#86efac}.ec-run{background:#78350f;color:#fcd34d}
+.ec-wait{background:#1e293b;color:#94a3b8}
+#hud-left{top:76px;left:10px;width:228px;max-height:calc(100vh - 280px);overflow-y:auto}
+#hud-right{top:76px;right:10px;width:228px;max-height:calc(100vh - 280px);overflow-y:auto}
+#hud-bottom{bottom:10px;left:10px;right:78px}
+.sec-t{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#7c8da3;
+ margin:8px 0 6px;font-weight:700}
+.sec-t:first-child{margin-top:0}
+.agent-row{display:flex;align-items:center;gap:8px;padding:6px 4px;
+ border-bottom:1px solid #1a2636;font-size:12px}
+.agent-row:last-child{border-bottom:none}
+.agent-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.agent-row .an{font-weight:700;white-space:nowrap}
+.agent-row .st{margin-left:auto;font-size:11px;white-space:nowrap}
+.tok{color:#7c8da3;font-size:11px;margin-top:2px}
+.st-busy{color:#fbbf24}.st-ready{color:#4ade80}.st-stale{color:#64748b}.st-error{color:#f87171}
+.fin-row{display:flex;justify-content:space-between;font-size:12px;padding:3px 0;
+ border-bottom:1px solid #16202f}
+.fin-row:last-child{border:none}
+.fin-row .v{color:#fff;font-weight:600;text-align:right}
+.dbar{background:#0b1220;border-radius:6px;height:8px;overflow:hidden;margin:2px 0 6px}
+.dbar>div{height:100%;border-radius:6px}
+#ec-steps{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.ec-step{background:rgba(13,20,32,.82);border:1px solid #223148;border-radius:10px;
+ padding:8px 10px;pointer-events:auto}
+.ec-step .eid{font-weight:700;font-size:12px}
+.ec-step .enm{font-size:11px;color:#9fb2c8;margin:2px 0}
+.pbar{background:#0b1220;border-radius:8px;height:10px;overflow:hidden;margin-top:6px}
+.pfill{height:100%;border-radius:8px;transition:width .6s}
+.pmeta{font-size:11px;color:#7c8da3;margin-top:4px}
+.stripes{background:repeating-linear-gradient(45deg,#b45309,#b45309 8px,#d97706 8px,#d97706 16px);
+ animation:slide 1s linear infinite;background-size:28px 28px}
+@keyframes slide{to{background-position:28px 0}}
+#chat-bubble{position:fixed;right:14px;bottom:14px;z-index:30;width:52px;height:52px;
+ border-radius:50%;background:linear-gradient(135deg,#4aa8ff,#b07bff);border:none;
+ font-size:24px;cursor:pointer;box-shadow:0 4px 16px rgba(74,168,255,.5)}
+#chat-panel{position:fixed;right:14px;bottom:76px;z-index:30;width:320px;max-height:440px;
+ display:none;flex-direction:column;background:rgba(13,20,32,.95);border:1px solid #2a3d5c;
+ border-radius:14px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.6)}
+#chat-panel.open{display:flex}
+#chat-msgs{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:200px}
+.msg{max-width:85%;padding:8px 10px;border-radius:12px;font-size:12px;line-height:1.45}
+.msg.user{align-self:flex-end;background:#1d4ed8;color:#fff}
+.msg.ai{align-self:flex-start;background:#1e293b;border:1px solid #2a3d5c}
+.msg .who{font-size:10px;color:#7c8da3;margin-bottom:2px}
+#chat-form{display:flex;gap:6px;padding:8px;border-top:1px solid #223148}
+#chat-form input{flex:1;background:#0b1220;border:1px solid #2a3d5c;border-radius:8px;
+ color:#fff;padding:8px;font-size:12px}
+#chat-form button{background:#4aa8ff;border:none;border-radius:8px;color:#fff;
+ padding:0 14px;cursor:pointer;font-size:14px}
+#chat-agent{width:100%;background:#0b1220;color:#fff;border:none;border-bottom:1px solid #223148;
+ padding:8px;font-size:12px}
+#settings-btn{position:fixed;top:76px;right:248px;z-index:30;width:40px;height:40px;
+ border-radius:50%;background:rgba(13,20,32,.9);border:1px solid #2a3d5c;color:#fff;
+ font-size:18px;cursor:pointer}
+#settings-panel{position:fixed;top:124px;right:248px;z-index:30;width:250px;display:none;
+ background:rgba(13,20,32,.95);border:1px solid #2a3d5c;border-radius:12px;padding:12px}
+#settings-panel.open{display:block}
+.set-row{display:flex;justify-content:space-between;align-items:center;
+ padding:8px 0;border-bottom:1px solid #1a2636;font-size:12px}
+.set-row:last-child{border:none}
+.set-row select{background:#0b1220;color:#fff;border:1px solid #2a3d5c;border-radius:6px;padding:4px}
+.switch{position:relative;width:38px;height:20px;background:#334155;border-radius:12px;cursor:pointer;flex-shrink:0}
+.switch.on{background:#22c55e}
+.switch::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;
+ border-radius:50%;background:#fff;transition:left .2s}
+.switch.on::after{left:20px}
+#toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:40;
+ display:none;background:rgba(13,20,32,.95);border:1px solid #4aa8ff;border-radius:10px;
+ padding:10px 18px;font-size:13px}
+#loading{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;
+ background:#070b12;font-size:15px;color:#7c8da3}
+@media(max-width:900px){
+ #hud-left,#hud-right{display:none}
+ #ec-steps{grid-template-columns:repeat(2,1fr)}
+ #hud-bottom{right:10px}
+ #settings-btn{right:14px}#settings-panel{right:14px}
+}
+</style></head>
+<body>
+<div id="loading">🌐 Đang dựng văn phòng 3D…</div>
+<div id="scene"></div>
+
+<div class="hud" id="hud-top"><div class="card" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;width:100%">
+ <span class="title">🌐 Văn Phòng AI 3D</span>
+ <span class="stats" id="company-stats"></span>
+ <span id="ec-strip"></span>
+ <span class="navlinks">
+  <a href="/ai-office">🏢 VP 2D</a><a href="/chat">💬 Chat</a><a href="/">📊 Tổng quan</a>
+ </span>
+</div></div>
+
+<div class="hud" id="hud-left"><div class="card">
+ <div class="sec-t">🤖 Nhân sự · Token</div><div id="agent-list"></div>
+</div></div>
+
+<div class="hud" id="hud-right"><div class="card">
+ <div class="sec-t">💰 Tài chính</div><div id="finance-box"></div>
+ <div class="sec-t">💽 Ổ cứng</div><div id="drive-box"></div>
+</div></div>
+
+<div class="hud" id="hud-bottom"><div class="card">
+ <div class="sec-t">🔀 EC Shuffle — xáo folder gom chỗ cho EC Team</div>
+ <div id="ec-steps"></div>
+</div></div>
+
+<button id="chat-bubble" title="Chat với AI">💬</button>
+<div id="chat-panel">
+ <select id="chat-agent">
+  <option value="auto">🤖 Tự chọn AI</option><option value="gemini">🦊 Gemini</option>
+  <option value="muse">🦉 Muse</option><option value="deepseek">🦈 DeepSeek</option>
+  <option value="claude">🐯 Claude</option><option value="lmstudio">🐸 LM Studio</option>
+ </select>
+ <div id="chat-msgs"></div>
+ <form id="chat-form"><input id="chat-input" placeholder="Nhắn cho AI…" autocomplete="off">
+ <button type="submit">➤</button></form>
+</div>
+
+<button id="settings-btn" title="Cài đặt">⚙️</button>
+<div id="settings-panel"><div class="card" style="border:none;background:none;padding:0;box-shadow:none">
+ <div class="sec-t">⚙️ Cài đặt hiển thị</div>
+ <div class="set-row"><span>🚶 Tự động di chuyển</span><div class="switch" id="sw-move"></div></div>
+ <div class="set-row"><span>🎥 Góc nhìn camera</span>
+  <select id="sel-cam"><option value="iso">Isometric</option>
+  <option value="top">Top-down</option><option value="free">Tự do xoay</option></select></div>
+ <div class="set-row"><span>⏱️ Refresh dữ liệu</span>
+  <select id="sel-refresh"><option value="15">15 giây</option>
+  <option value="30" selected>30 giây</option><option value="60">60 giây</option></select></div>
+ <div class="set-row"><span>👁️ Hiện tên nhân vật</span><div class="switch" id="sw-label"></div></div>
+ <div class="set-row"><span>🔔 Báo khi đổi trạng thái</span><div class="switch" id="sw-notify"></div></div>
+</div></div>
+
+<div id="toast"></div>
+<script type="importmap">
+{"imports":{
+ "three":"https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js",
+ "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+
+const CSRF = "__CSRF__";
+let STATE = __STATE__;
+const $ = id => document.getElementById(id);
+
+// ---------- settings ----------
+const DEF_SET = {autoMove:true, camera:'iso', refresh:30, labels:true, notify:false};
+let SET = Object.assign({}, DEF_SET);
+try{ Object.assign(SET, JSON.parse(localStorage.getItem('vp3d-set')||'{}')); }catch(e){}
+function saveSet(){ localStorage.setItem('vp3d-set', JSON.stringify(SET)); }
+
+// ---------- zones ----------
+const ZONES = [
+ {id:'ketoan',   x:-16,  z:-10, c:0x4aa8ff, icon:'\U0001F3E6', label:'Kế Toán'},
+ {id:'kythuat',  x:-5.5, z:-10, c:0x3ddc84, icon:'\U0001F4BE', label:'Kỹ Thuật'},
+ {id:'hauky',    x:5.5,  z:-10, c:0xff9f43, icon:'\U0001F3AC', label:'Hậu Kỳ'},
+ {id:'app',      x:16,   z:-10, c:0xb07bff, icon:'\U0001F4F1', label:'App'},
+ {id:'marketing',x:-16,  z:10,  c:0xf472b6, icon:'\U0001F4E3', label:'Marketing'},
+ {id:'dulieu',   x:-5.5, z:10,  c:0x39c5ff, icon:'\U0001F5C4', label:'Dữ Liệu'},
+ {id:'dieuhanh', x:5.5,  z:10,  c:0xe8b04a, icon:'\U0001F4C5', label:'Điều Hành'},
+ {id:'ec',       x:16,   z:10,  c:0xf59e0b, icon:'\U0001F500', label:'EC Shuffle'},
+];
+const zoneOf = id => ZONES.find(z=>z.id===id) || ZONES[0];
+const ST_COLOR = {busy:0xf59e0b, ready:0x22c55e, stale:0x64748b, error:0xef4444};
+const ST_TXT = {busy:['\U0001F504 ĐANG CHẠY','st-busy'], ready:['\U0001F7E2 SẴN SÀNG','st-ready'],
+                stale:['\U0001F7E1 CHƯA KÍCH HOẠT','st-stale'], error:['\U0001F534 LỖI','st-error']};
+
+// ---------- three setup ----------
+const container = $('scene');
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+container.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x070b12);
+scene.fog = new THREE.Fog(0x070b12, 60, 140);
+const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 400);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.08;
+controls.maxPolarAngle = 1.35; controls.minDistance = 8; controls.maxDistance = 120;
+controls.enabled = false;
+
+scene.add(new THREE.HemisphereLight(0x8fb8ff, 0x0a0f18, 0.55));
+const sun = new THREE.DirectionalLight(0xfff2dd, 1.6);
+sun.position.set(24, 34, 14); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left=-30; sun.shadow.camera.right=30;
+sun.shadow.camera.top=24; sun.shadow.camera.bottom=-24;
+scene.add(sun);
+ZONES.forEach(z=>{
+  const pt = new THREE.PointLight(z.c, 12, 16, 1.8);
+  pt.position.set(z.x, 4, z.z); scene.add(pt);
+});
+
+// ---------- floor ----------
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(48, 34),
+  new THREE.MeshStandardMaterial({color:0x0d1420, roughness:.9}));
+floor.rotation.x = -Math.PI/2; floor.receiveShadow = true; scene.add(floor);
+const grid = new THREE.GridHelper(48, 24, 0x1c2a44, 0x14202f);
+grid.position.y = 0.01; scene.add(grid);
+
+// ---------- label sprite ----------
+function makeLabel(text, scale=1){
+  const cv = document.createElement('canvas'); cv.width=512; cv.height=112;
+  const g = cv.getContext('2d');
+  g.fillStyle='rgba(8,13,22,0.78)';
+  g.beginPath(); g.roundRect(6,6,500,100,24); g.fill();
+  g.strokeStyle='rgba(120,160,220,0.5)'; g.lineWidth=3; g.stroke();
+  g.font='bold 52px "Segoe UI",sans-serif'; g.textAlign='center'; g.textBaseline='middle';
+  g.fillStyle='#fff'; g.fillText(text, 256, 58);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:tex, transparent:true, depthTest:false}));
+  sp.scale.set(4.6*scale, 1.0*scale, 1); sp.renderOrder = 5;
+  return sp;
+}
+
+// ---------- zones visuals ----------
+ZONES.forEach(z=>{
+  const pad = new THREE.Mesh(
+    new THREE.PlaneGeometry(9.6, 7.4),
+    new THREE.MeshStandardMaterial({color:z.c, transparent:true, opacity:0.10, roughness:1}));
+  pad.rotation.x = -Math.PI/2; pad.position.set(z.x, 0.02, z.z); scene.add(pad);
+  const edge = new THREE.LineLoop(
+    new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-4.8,0,-3.7), new THREE.Vector3(4.8,0,-3.7),
+      new THREE.Vector3(4.8,0,3.7), new THREE.Vector3(-4.8,0,3.7)]),
+    new THREE.LineBasicMaterial({color:z.c, transparent:true, opacity:.7}));
+  edge.position.set(z.x, 0.04, z.z); scene.add(edge);
+  const desk = new THREE.Mesh(
+    new THREE.BoxGeometry(3.4, 0.9, 1.6),
+    new THREE.MeshStandardMaterial({color:0x1b2740, roughness:.6}));
+  desk.position.set(z.x, 0.45, z.z-1.8); desk.castShadow = true; scene.add(desk);
+  const screen = new THREE.Mesh(
+    new THREE.BoxGeometry(2.2, 1.1, 0.08),
+    new THREE.MeshStandardMaterial({color:0x0a0f18, emissive:z.c, emissiveIntensity:.55}));
+  screen.position.set(z.x, 1.5, z.z-2.2); scene.add(screen);
+  z._screen = screen;
+  const lab = makeLabel(z.icon+' '+z.label, 1.15);
+  lab.position.set(z.x, 4.6, z.z); scene.add(lab);
+});
+
+// ---------- agents ----------
+const agents = {};   // key -> {data, group, ring, label, target, speed, wanderT, bob}
+function buildAgent(a){
+  const g = new THREE.Group();
+  const col = new THREE.Color(a.color);
+  const body = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.42, 0.58, 1.2, 20),
+    new THREE.MeshStandardMaterial({color:col, roughness:.45, metalness:.15}));
+  body.position.y = 0.78; body.castShadow = true; g.add(body);
+  const head = new THREE.Mesh(
+    new THREE.SphereGeometry(0.37, 20, 16),
+    new THREE.MeshStandardMaterial({color:col.clone().multiplyScalar(1.4), roughness:.35}));
+  head.position.y = 1.72; head.castShadow = true; g.add(head);
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.68, 0.88, 40),
+    new THREE.MeshBasicMaterial({color:0x22c55e, transparent:true, opacity:.9, side:THREE.DoubleSide}));
+  ring.rotation.x = -Math.PI/2; ring.position.y = 0.04; g.add(ring);
+  const label = makeLabel(a.char+' '+a.name, 0.85);
+  label.position.y = 2.5; g.add(label);
+  const z = zoneOf(a.dept);
+  g.position.set(z.x + (Math.random()*4-2), 0, z.z + (Math.random()*3-1));
+  scene.add(g);
+  agents[a.key] = {data:a, group:g, ring:ring, label:label,
+    target:g.position.clone(), speed:3.4, wanderT:performance.now()/1000 + Math.random()*5,
+    bob:Math.random()*6, prevStatus:a.status};
+}
+STATE.agents.forEach(buildAgent);
+
+function deskFront(zoneId){
+  const z = zoneOf(zoneId);
+  return new THREE.Vector3(z.x, 0, z.z + 0.6);
+}
+function ecRunning(){
+  return STATE.ec.some(s=>s.status==='run');
+}
+function assignTargets(){
+  STATE.agents.forEach(a=>{
+    const ag = agents[a.key]; if(!ag) return;
+    if(a.status==='busy'){
+      ag.target.copy(deskFront(a.dept));
+    } else if(a.key==='muse' && ecRunning()){
+      const z = zoneOf('ec'); ag.target.set(z.x, 0, z.z + 0.6);
+    }
+  });
+}
+assignTargets();
+
+// ---------- camera ----------
+function applyCamera(){
+  const m = SET.camera;
+  controls.enabled = (m==='free');
+  if(m==='top'){ camera.position.set(0, 54, 0.02); }
+  else if(m==='iso'){ camera.position.set(30, 27, 30); }
+  camera.lookAt(0, 0, 0);
+  if(m!=='free'){ controls.target.set(0,0,0); }
+}
+applyCamera();
+
+// ---------- panels ----------
+function fmtT(t){ return t>=1e6 ? (t/1e6).toFixed(1)+'M' : t>=1e3 ? (t/1e3).toFixed(1)+'K' : ''+Math.round(t||0); }
+function renderPanels(){
+  const S = STATE;
+  // company stats
+  const revM = S.finance['Doanh thu tháng này'] || '?';
+  $('company-stats').innerHTML =
+    '💰 Tháng này: <b>'+revM+'</b> · ⭐ Uy tín: <b>'+S.company.reputation+'</b> · '+
+    '✅ Tỷ lệ OK: <b>'+S.company.avg_ok+'%</b> · 🎟️ Token 30d: <b>'+fmtT(
+      S.agents.reduce((s,a)=>s+((a.tokens[30]||{}).tokens||0),0))+'</b>';
+  // ec strip
+  $('ec-strip').innerHTML = S.ec.map(s=>{
+    const cls = s.status==='done'?'ec-done':s.status==='run'?'ec-run':'ec-wait';
+    const txt = s.status==='done'?'✅ '+s.id : s.status==='run'?'🔄 '+s.id+'…':'⏳ '+s.id;
+    return '<span class="ec-mini '+cls+'">'+txt+'</span>';
+  }).join('');
+  // agents
+  $('agent-list').innerHTML = S.agents.map(a=>{
+    const t = ST_TXT[a.status]||ST_TXT.stale;
+    const t1=a.tokens[1]||{}, t7=a.tokens[7]||{}, t30=a.tokens[30]||{};
+    return '<div class="agent-row"><span class="agent-dot" style="background:'+a.color+'"></span>'+
+     '<span><span class="an">'+a.char+' '+a.name+'</span><br><span class="tok">1d:'+fmtT(t1.tokens)+
+     ' · 7d:'+fmtT(t7.tokens)+' · 30d:'+fmtT(t30.tokens)+'</span></span>'+
+     '<span class="st '+t[1]+'">'+t[0]+'</span></div>';
+  }).join('');
+  // finance
+  const F = S.finance, keys = Object.keys(F);
+  $('finance-box').innerHTML = keys.length ? keys.slice(0,6).map(k=>
+    '<div class="fin-row"><span>'+k+'</span><span class="v">'+F[k]+'</span></div>').join('')
+    : '<div class="fin-row"><span>⏳</span><span class="v">đang tải…</span></div>';
+  // drives
+  const D = S.drives;
+  $('drive-box').innerHTML = ['G','H','J'].map(d=>{
+    const i = D[d];
+    if(!i) return '<div class="fin-row"><span>💽 Ổ '+d+'</span><span class="v">⏳</span></div>';
+    const col = i.pct>=95?'#ef4444':i.pct>=85?'#f59e0b':'#22c55e';
+    return '<div><div class="fin-row"><span>💽 Ổ '+d+'</span><span class="v">'+i.free.toFixed(0)+
+     'GB trống</span></div><div class="dbar"><div style="width:'+i.pct+'%;background:'+col+'"></div></div></div>';
+  }).join('');
+  // ec steps
+  $('ec-steps').innerHTML = S.ec.map(s=>{
+    const cls = s.status==='done'?'#22c55e':s.status==='run'?'#f59e0b':'#475569';
+    const bar = s.pct>=0
+      ? '<div class="pbar"><div class="pfill" style="width:'+s.pct+'%;background:'+cls+'"></div></div>'+
+        '<div class="pmeta">'+s.pct+'% · '+s.detail+'</div>'
+      : '<div class="pbar"><div class="pfill stripes" style="width:100%"></div></div>'+
+        '<div class="pmeta">'+s.detail+'</div>';
+    return '<div class="ec-step"><div class="eid">'+s.char+' '+s.id+'</div>'+
+     '<div class="enm">'+s.name+'<br>'+s.route+'</div>'+bar+'</div>';
+  }).join('');
+}
+renderPanels();
+
+// ---------- data refresh ----------
+let lastStatus = {};
+STATE.agents.forEach(a=>{ lastStatus[a.key]=a.status; });
+async function refreshData(){
+  try{
+    const r = await fetch('/api/office3d/state');
+    const d = await r.json();
+    STATE = d;
+    d.agents.forEach(a=>{
+      const ag = agents[a.key]; if(!ag) return;
+      ag.data = a;
+      ag.ring.material.color.setHex(ST_COLOR[a.status]||0x64748b);
+      if(SET.notify && lastStatus[a.key] && lastStatus[a.key]!==a.status){
+        toast(a.char+' '+a.name+': '+(ST_TXT[a.status]?ST_TXT[a.status][0]:a.status));
+      }
+      lastStatus[a.key] = a.status;
+    });
+    assignTargets();
+    renderPanels();
+  }catch(e){}
+}
+let refreshTimer = setInterval(refreshData, SET.refresh*1000);
+
+// ---------- toast ----------
+let toastT=null;
+function toast(msg){
+  const t=$('toast'); t.textContent=msg; t.style.display='block';
+  clearTimeout(toastT); toastT=setTimeout(()=>{t.style.display='none';}, 3500);
+}
+
+// ---------- animation ----------
+const clock = new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = clock.elapsedTime;
+  const now = performance.now()/1000;
+  Object.values(agents).forEach(ag=>{
+    const p = ag.group.position, tg = ag.target;
+    const dx = tg.x-p.x, dz = tg.z-p.z, dist = Math.hypot(dx,dz);
+    if(dist > 0.12){
+      const step = Math.min(dist, ag.speed*dt);
+      p.x += dx/dist*step; p.z += dz/dist*step;
+      ag.group.rotation.y = Math.atan2(dx, dz);
+      p.y = Math.abs(Math.sin(t*11+ag.bob))*0.09;   // bước đi nảy
+    } else {
+      p.y *= 0.9;
+      // đi lang thang khi rảnh
+      const st = ag.data.status;
+      if(SET.autoMove && st!=='busy' && now > ag.wanderT){
+        const z = zoneOf(ag.data.dept);
+        ag.target.set(z.x+(Math.random()*7-3.5), 0, z.z+(Math.random()*5-2.5));
+        ag.wanderT = now + 4 + Math.random()*6;
+      }
+    }
+    // màn hình desk sáng khi chủ đang bận
+    const z = zoneOf(ag.data.dept);
+    if(z._screen) z._screen.material.emissiveIntensity = ag.data.status==='busy' ? 1.2 : 0.45;
+  });
+  // hiệu ứng màn hình EC khi đang chạy
+  const zec = zoneOf('ec');
+  if(zec._screen) zec._screen.material.emissiveIntensity = ecRunning() ? 1.3+Math.sin(t*4)*0.4 : 0.45;
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+$('loading').style.display='none';
+
+// ---------- settings ----------
+function bindSwitch(id, key, cb){
+  const el = $(id);
+  const paint = ()=>el.classList.toggle('on', !!SET[key]);
+  paint();
+  el.onclick = ()=>{ SET[key]=!SET[key]; saveSet(); paint(); if(cb)cb(); };
+}
+bindSwitch('sw-move','autoMove');
+bindSwitch('sw-label','labels', ()=>{ Object.values(agents).forEach(a=>a.label.visible=SET.labels); });
+bindSwitch('sw-notify','notify');
+$('sel-cam').value = SET.camera;
+$('sel-cam').onchange = e=>{ SET.camera=e.target.value; saveSet(); applyCamera(); };
+$('sel-refresh').value = String(SET.refresh);
+$('sel-refresh').onchange = e=>{ SET.refresh=+e.target.value; saveSet();
+  clearInterval(refreshTimer); refreshTimer=setInterval(refreshData, SET.refresh*1000); };
+$('settings-btn').onclick = ()=>$('settings-panel').classList.toggle('open');
+if(!SET.labels) Object.values(agents).forEach(a=>a.label.visible=false);
+
+// ---------- chat ----------
+const AGENT_META = {gemini:['🦊','Gemini'], muse:['🦉','Muse'], deepseek:['🦈','DeepSeek'],
+                    claude:['🐯','Claude'], lmstudio:['🐸','LM Studio']};
+$('chat-bubble').onclick = ()=>{
+  const p=$('chat-panel'); p.classList.toggle('open');
+  if(p.classList.contains('open') && !$('chat-msgs').children.length) loadHistory();
+};
+function renderMsg(m){
+  const d=document.createElement('div');
+  const isU = m.role==='user';
+  d.className='msg '+(isU?'user':'ai');
+  const meta = !isU && m.agent && AGENT_META[m.agent] ? AGENT_META[m.agent][0]+' '+AGENT_META[m.agent][1] : '';
+  d.innerHTML = (meta?'<div class="who">'+meta+'</div>':'')+'<div></div>';
+  d.lastChild.textContent = m.content||'';
+  return d;
+}
+async function loadHistory(){
+  try{
+    const r = await fetch('/api/chat/history'); const d = await r.json();
+    const box=$('chat-msgs'); box.innerHTML='';
+    (d.messages||[]).slice(-30).forEach(m=>box.appendChild(renderMsg(m)));
+    box.scrollTop=box.scrollHeight;
+  }catch(e){}
+}
+$('chat-form').onsubmit = async e=>{
+  e.preventDefault();
+  const inp=$('chat-input'), text=inp.value.trim(); if(!text) return;
+  const agent=$('chat-agent').value; inp.value='';
+  const box=$('chat-msgs');
+  box.appendChild(renderMsg({role:'user', content:text})); box.scrollTop=box.scrollHeight;
+  const typing=document.createElement('div'); typing.className='msg ai'; typing.textContent='…';
+  box.appendChild(typing); box.scrollTop=box.scrollHeight;
+  try{
+    const r = await fetch('/api/chat/send',{method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:'msg='+encodeURIComponent(text)+'&agent='+encodeURIComponent(agent)+'&csrf='+encodeURIComponent(CSRF)});
+    const d = await r.json(); typing.remove();
+    if(d.message){ box.appendChild(renderMsg(d.message)); }
+    else if(d.error){ box.appendChild(renderMsg({role:'ai', agent:'muse', content:'⚠️ '+d.error})); }
+    box.scrollTop=box.scrollHeight;
+  }catch(err){ typing.remove(); }
+};
+</script>
+</body></html>
+"""
+        body = body.replace("__STATE__", state_json)
+        body = body.replace("__CSRF__", csrf)
+        body = body.replace("__USER__", _h.escape(user))
+        self._send(body)
+
 
     def _ai_office(self, user):
         """🏢 Văn Phòng AI — nhân vật là trung tâm, thống nhất với Orchestra."""
