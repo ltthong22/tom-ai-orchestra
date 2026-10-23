@@ -14,6 +14,20 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Load .env (local dev) nếu có — Railway dùng Variables riêng
+try:
+    _env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    if os.path.exists(_env_path):
+        with open(_env_path, encoding="utf-8") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if _line and not _line.startswith("#") and "=" in _line:
+                    _k, _v = _line.split("=", 1)
+                    _k, _v = _k.strip(), _v.strip().strip('"').strip("'")
+                    if _k and _k not in os.environ:
+                        os.environ[_k] = _v
+except Exception:
+    pass
 from orchestrator import Orchestrator, SubTask
 from auth.auth import verify, make_session, check_session, destroy_session, create_user, get_csrf
 
@@ -1654,7 +1668,7 @@ html,body{height:100%;overflow:hidden;background:#070b12;color:#e8eef5;
 .ec-mini{padding:3px 10px;border-radius:14px;font-weight:600;white-space:nowrap}
 .ec-done{background:#14532d;color:#86efac}.ec-run{background:#78350f;color:#fcd34d}
 .ec-wait{background:#1e293b;color:#94a3b8}
-#hud-left{top:76px;left:10px;width:228px;max-height:calc(100vh - 280px);overflow-y:auto}
+#hud-left{top:76px;left:66px;width:228px;max-height:calc(100vh - 280px);overflow-y:auto}
 #hud-right{top:76px;right:10px;width:228px;max-height:calc(100vh - 280px);overflow-y:auto}
 #hud-bottom{bottom:10px;left:10px;right:78px}
 .sec-t{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#7c8da3;
@@ -1961,7 +1975,13 @@ function makeLabel(text, scale=1){
   g.fillStyle='rgba(8,13,22,0.78)';
   g.beginPath(); g.roundRect(6,6,500,100,24); g.fill();
   g.strokeStyle='rgba(120,160,220,0.5)'; g.lineWidth=3; g.stroke();
-  g.font='bold 52px "Segoe UI",sans-serif'; g.textAlign='center'; g.textBaseline='middle';
+  // tự thu nhỏ font nếu text dài
+  let fs = 52;
+  g.font='bold '+fs+'px "Segoe UI",sans-serif';
+  while(g.measureText(text).width > 460 && fs > 24){
+    fs -= 4; g.font='bold '+fs+'px "Segoe UI",sans-serif';
+  }
+  g.textAlign='center'; g.textBaseline='middle';
   g.fillStyle='#fff'; g.fillText(text, 256, 58);
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:tex, transparent:true, depthTest:false}));
@@ -2053,9 +2073,8 @@ function buildAgent(a){
   ring.rotation.x = -Math.PI/2; ring.position.y = 0.04; g.add(ring);
   // label tên + token/cost
   const t30 = (a.tokens && a.tokens[30]) || {};
-  const tokTxt = t30.tokens ? ' 🎟️'+fmtT(t30.tokens)+' · $'+(t30.cost||0) : '';
-  const refill = a.key==='muse_main' ? ' 🔄refill tuần' : '';
-  const label = makeLabel(a.char+' '+a.name+tokTxt+refill, isMain?1.0:0.85);
+  const tokTxt = t30.tokens ? ' 🎟️'+fmtT(t30.tokens) : '';
+  const label = makeLabel(a.char+' '+a.name+tokTxt, isMain?1.0:0.85);
   label.position.y = R*2 + 1.35; g.add(label);
   // vị trí: Muse ở giữa, các con khác ở phòng ban
   let px, pz;
@@ -2467,7 +2486,7 @@ $('chat-form').onsubmit = async e=>{
         def _vnd(n):
             return f"{n:,}".replace(",", ".") + "đ"
 
-        # 5 nhân vật chính = 5 AI agent thật của Orchestra
+        # Nhân vật chính = AI agent thật của Orchestra + 2 role học từ mô hình bot theo vai trò
         AGENTS = [
             ("gemini", "🦊", "Gemini", "#4aa8ff", "Cáo lanh lợi",
              "📊 Phân tích chi tiêu"),
@@ -2475,6 +2494,10 @@ $('chat-form').onsubmit = async e=>{
              "✅ Điều phối + Duyệt chi"),
             ("deepseek", "🦈", "DeepSeek", "#39c5ff", "Cá mập tinh mắt",
              "🔍 Soi công nợ"),
+            ("safety", "🛡️", "Bot An Toàn", "#ff6b6b", "Khiên bảo vệ",
+             "🔒 Kiểm duyệt an toàn"),
+            ("pm", "📋", "Trưởng Dự Án", "#ffa94d", "Điều phối viên",
+             "📊 Điều phối task"),
             ("lmstudio", "🐸", "LM Studio", "#3ddc84", "Ếch tốc độ",
              "⚡ Trả lời nhanh"),
         ]
