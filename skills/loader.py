@@ -8,9 +8,42 @@ import os
 import re
 
 SKILLS_DIR = os.path.expanduser("~/workspace/custom-skills")
+# Skills đóng gói kèm repo (dùng được trên Railway, nơi không có custom-skills)
+BUNDLED_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bundled")
 REGISTRY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "skills_registry.json")
 
 _cache = None
+
+
+def _load_from_dir(skills: dict, base_dir: str):
+    """Đọc SKILL.md từ mọi thư mục con của base_dir, merge vào skills."""
+    if not os.path.isdir(base_dir):
+        return
+    for name in sorted(os.listdir(base_dir)):
+        if name in skills:
+            continue
+        path = os.path.join(base_dir, name)
+        md_path = os.path.join(path, "SKILL.md")
+        if not os.path.isdir(path) or not os.path.isfile(md_path):
+            continue
+        try:
+            with open(md_path, encoding="utf-8", errors="ignore") as f:
+                md = f.read()
+        except OSError:
+            continue
+        # tiêu đề = dòng # đầu tiên
+        title = name
+        m = re.search(r"^#\s+(.+)$", md, re.M)
+        if m:
+            title = m.group(1).strip()
+        skills[name] = {
+            "name": name,
+            "title": title,
+            "summary": _extract_summary(md),
+            "triggers": _extract_triggers(md),
+            "path": md_path,
+            "size_kb": round(os.path.getsize(md_path) / 1024, 1),
+        }
 
 
 def _extract_summary(md_text: str, max_lines: int = 8) -> str:
@@ -46,31 +79,8 @@ def load_all_skills(force: bool = False) -> dict:
     if _cache is not None and not force:
         return _cache
     skills = {}
-    if not os.path.isdir(SKILLS_DIR):
-        return skills
-    for name in sorted(os.listdir(SKILLS_DIR)):
-        path = os.path.join(SKILLS_DIR, name)
-        md_path = os.path.join(path, "SKILL.md")
-        if not os.path.isdir(path) or not os.path.isfile(md_path):
-            continue
-        try:
-            with open(md_path, encoding="utf-8", errors="ignore") as f:
-                md = f.read()
-        except OSError:
-            continue
-        # tiêu đề = dòng # đầu tiên
-        title = name
-        m = re.search(r"^#\s+(.+)$", md, re.M)
-        if m:
-            title = m.group(1).strip()
-        skills[name] = {
-            "name": name,
-            "title": title,
-            "summary": _extract_summary(md),
-            "triggers": _extract_triggers(md),
-            "path": md_path,
-            "size_kb": round(os.path.getsize(md_path) / 1024, 1),
-        }
+    _load_from_dir(skills, SKILLS_DIR)
+    _load_from_dir(skills, BUNDLED_DIR)
     _cache = skills
     return skills
 

@@ -375,6 +375,62 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _data_context(self, msg: str) -> str:
+        """Phát hiện intent về dữ liệu thật, trả về context để inject vào prompt."""
+        low = msg.lower()
+        parts = []
+
+        def has(*words):
+            return any(w in low for w in words)
+
+        # 1. Token usage
+        if has("token", "xài bao nhiêu", "tốn bao nhiêu", "usage"):
+            try:
+                from data_providers import token_stats
+                if has("hôm nay", "today"):
+                    parts.append(token_stats.get_today())
+                elif has("7 ngày", "tuần"):
+                    parts.append(token_stats.format_stats(7))
+                else:
+                    parts.append(token_stats.format_stats(30))
+            except Exception:
+                pass
+
+        # 2. Tài chính
+        if has("tài chính", "tài sản", "công nợ", "thu", " chi ", "số dư",
+               "doanh thu", "nợ", "tiền", "finance"):
+            try:
+                from data_providers import finance_data
+                parts.append(finance_data.format_summary())
+            except Exception:
+                pass
+
+        # 3. Drive — tìm file/folder
+        if has("tìm", "drive", "folder", "file", "ảnh", "ở đâu", "hình"):
+            try:
+                from data_providers import drive_index
+                # trích từ khóa: bỏ stopword đơn giản
+                q = msg
+                for sw in ["tìm", "giúp", "cho", "anh", "em", "cái", "trong",
+                           "drive", "ở đâu", "?", "ạ", "nhé", "đi"]:
+                    q = q.replace(sw, " ")
+                q = " ".join(q.split())
+                if len(q) >= 2:
+                    parts.append(drive_index.format_search(q))
+            except Exception:
+                pass
+
+        # 4. Lịch
+        if has("lịch", "sự kiện", "event", "hôm nay có gì", "mai có gì",
+               "tuần này", "calendar"):
+            try:
+                from data_providers import calendar_data
+                parts.append(calendar_data.format_upcoming(7))
+            except Exception:
+                pass
+
+        return "\n\n".join(p for p in parts if p)
+
     def _api_chat_send(self, q):
         """Nhận tin nhắn user -> orchestrator chọn AI -> trả lời."""
         import json as _json
@@ -388,12 +444,22 @@ class H(BaseHTTPRequestHandler):
                 from orchestrator.core import SubTask
                 # lưu tin user
                 save_message("user", msg)
+                # inject dữ liệu thật khi câu hỏi liên quan (data_providers)
+                prompt = msg
+                try:
+                    ctx = self._data_context(msg)
+                    if ctx:
+                        prompt = (f"[DỮ LIỆU THẬT — dùng để trả lời, "
+                                  f"không bịa số]\n{ctx}\n\n"
+                                  f"[CÂU HỎI]\n{msg}")
+                except Exception:
+                    pass
                 # chọn agent: auto -> dùng pick_agent, hoặc ép agent cụ thể
                 if agent_want != "auto":
                     agent_name = agent_want
                 else:
                     agent_name = orch.pick_agent("quick_qa")
-                st = SubTask(id="st-chat", kind="quick_qa", prompt=msg,
+                st = SubTask(id="st-chat", kind="quick_qa", prompt=prompt,
                              agent_name=agent_name if agent_want != "auto" else None)
                 r = orch._run_subtask(st)
                 agent_used = r.get("agent", agent_name)
