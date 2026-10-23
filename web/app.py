@@ -616,7 +616,6 @@ const AGENT_META = {
   muse:{label:'Muse', icon:'🟣', cls:'muse'},
   lmstudio:{label:'LM Studio', icon:'🟢', cls:'lmstudio'},
   deepseek:{label:'DeepSeek', icon:'🔷', cls:'deepseek'},
-  claude:{label:'Claude', icon:'🟠', cls:'claude'},
 };
 const box = document.getElementById('chat-msgs');
 const typing = document.getElementById('typing');
@@ -778,8 +777,8 @@ setInterval(async ()=>{
 <script>
 const KIND_ICON = {{"summarize":"📝","classify":"🏷️","code":"💻","reasoning":"🧠","verify":"✅",
   "extract":"📤","translate":"🌐","quick_qa":"💬","plan":"📋","decide":"🎯","browse":"🌐","execute":"⚙️","orchestrate":"🎼"}};
-const AGENT_COLOR = {{"gemini":"b","lmstudio":"g","muse":"y","deepseek":"r","claude":"b"}};
-const AGENT_LABEL = {{"gemini":"Gemini","lmstudio":"LM Studio","muse":"Muse","deepseek":"DeepSeek","claude":"Claude"}};
+const AGENT_COLOR = {{"gemini":"b","lmstudio":"g","muse":"y","deepseek":"r"}};
+const AGENT_LABEL = {{"gemini":"Gemini","lmstudio":"LM Studio","muse":"Muse","deepseek":"DeepSeek"}};
 
 async function loadLive(){{
   try{{
@@ -950,7 +949,6 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
             ("muse", "🟣", "Muse", "#A855F7"),
             ("lmstudio", "🟢", "LM Studio", "#22C55E"),
             ("deepseek", "🔷", "DeepSeek", "#0EA5E9"),
-            ("claude", "🟠", "Claude", "#F97316"),
         ]
         aemoji = {a: e for a, e, _, _ in AGENT_META}
         aname = {a: n for a, _, n, _ in AGENT_META}
@@ -1192,7 +1190,6 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
             ("gemini",   "🦊", "Gemini",    "#4aa8ff", "📊 Phân tích chi tiêu"),
             ("muse",     "🦉", "Muse",      "#b07bff", "✅ Điều phối + Duyệt chi"),
             ("deepseek", "🦈", "DeepSeek",  "#39c5ff", "🔍 Soi công nợ"),
-            ("claude",   "🐯", "Claude",    "#ff9f43", "📝 Lập báo cáo"),
             ("lmstudio", "🐸", "LM Studio", "#3ddc84", "⚡ Trả lời nhanh"),
         ]
         desks = []
@@ -1263,8 +1260,6 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
              "✅ Điều phối + Duyệt chi", "dieuhanh"),
             ("deepseek", "\U0001F988", "DeepSeek", "#39c5ff",
              "\U0001F50D Soi công nợ", "dulieu"),
-            ("claude", "\U0001F42F", "Claude", "#ff9f43",
-             "\U0001F4DD Lập báo cáo", "marketing"),
             ("lmstudio", "\U0001F438", "LM Studio", "#3ddc84",
              "⚡ Trả lời nhanh", "app"),
         ]
@@ -1304,12 +1299,15 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
             ok = round((calls - fails) * 100 / calls, 1) if calls else 100.0
             if inflight > 0:
                 status = "busy"
-            elif calls and fails * 2 >= calls:
-                status = "error"
-            elif st.get("updated_at"):
-                status = "ready"
             else:
-                status = "stale"
+                try:
+                    from data_providers.provider_health import provider_health
+                    healthy, _ = provider_health(key)
+                    status = "ready" if healthy else "error"
+                except Exception:
+                    status = "ready" if st.get("updated_at") else "stale"
+                if calls and fails * 2 >= calls:
+                    status = "error"
             rd = rpg.get("agents", {}).get(key, {})
             agents.append({
                 "key": key, "char": char, "name": name, "color": color,
@@ -1318,6 +1316,35 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
                 "ok_rate": ok, "calls": calls,
                 "tokens": tok.get(key, {}),
             })
+        # Muse — trợ lý chính (thực thể thứ 6, data từ ai-manager)
+        _muse_tok = {}
+        try:
+            _mp = _o.path.expanduser("~/workspace/ai-manager/token-muse-main.json")
+            if _o.path.exists(_mp):
+                _md = _j.load(open(_mp, encoding="utf-8"))
+                _c30 = _md.get("cost_usd_30d", 0)
+                _muse_tok = {
+                    1: {"tokens": _md.get("tokens_1d", 0), "calls": 0,
+                        "cost": round(_c30 / 30, 4) if _c30 else 0},
+                    7: {"tokens": _md.get("tokens_7d", 0), "calls": 0,
+                        "cost": round(_c30 / 30 * 7, 4) if _c30 else 0},
+                    30: {"tokens": _md.get("tokens_30d", 0), "calls": 0,
+                         "cost": round(_c30, 4)},
+                }
+        except Exception:
+            pass
+        agents.append({
+            "key": "muse_main", "char": "🤖", "name": "Muse",
+            "color": "#e879f9",
+            "role": "🎯 Trợ lý chính của anh", "dept": "dieuhanh",
+            "status": "ready" if _muse_tok else "stale",
+            "in_flight": 0, "rank": 6, "ok_rate": 100.0, "calls": 0,
+            "tokens": _muse_tok, "is_main": True,
+        })
+        # DeepSeek: prepaid (không refill) — đánh dấu để frontend hiện
+        for _a in agents:
+            if _a["key"] == "deepseek":
+                _a["prepaid"] = True
         fin = {}
         try:
             from data_providers.finance_data import fetch_dashboard, is_configured
@@ -1479,9 +1506,6 @@ html,body{height:100%;overflow:hidden;background:#070b12;color:#e8eef5;
  <span class="title">🌐 Văn Phòng AI 3D</span>
  <span class="stats" id="company-stats"></span>
  <span id="ec-strip"></span>
- <span class="navlinks">
-  <a href="/ai-office">🏢 VP 2D</a><a href="/chat">💬 Chat</a><a href="/">📊 Tổng quan</a>
- </span>
 </div></div>
 
 <div class="hud" id="hud-left"><div class="card">
@@ -1503,7 +1527,7 @@ html,body{height:100%;overflow:hidden;background:#070b12;color:#e8eef5;
  <select id="chat-agent">
   <option value="auto">🤖 Tự chọn AI</option><option value="gemini">🦊 Gemini</option>
   <option value="muse">🦉 Muse</option><option value="deepseek">🦈 DeepSeek</option>
-  <option value="claude">🐯 Claude</option><option value="lmstudio">🐸 LM Studio</option>
+  <option value="lmstudio">🐸 LM Studio</option>
  </select>
  <div id="chat-msgs"></div>
  <form id="chat-form"><input id="chat-input" placeholder="Nhắn cho AI…" autocomplete="off">
@@ -1540,7 +1564,7 @@ let STATE = __STATE__;
 const $ = id => document.getElementById(id);
 
 // ---------- settings ----------
-const DEF_SET = {autoMove:true, camera:'iso', refresh:30, labels:true, notify:false};
+const DEF_SET = {autoMove:true, camera:'top', refresh:30, labels:true, notify:false};
 let SET = Object.assign({}, DEF_SET);
 try{ Object.assign(SET, JSON.parse(localStorage.getItem('vp3d-set')||'{}')); }catch(e){}
 function saveSet(){ localStorage.setItem('vp3d-set', JSON.stringify(SET)); }
@@ -1638,33 +1662,136 @@ ZONES.forEach(z=>{
   lab.position.set(z.x, 4.6, z.z); scene.add(lab);
 });
 
-// ---------- agents ----------
-const agents = {};   // key -> {data, group, ring, label, target, speed, wanderT, bob}
+// ---------- agents (kiểu cute tròn như video Phòng kế toán AI) ----------
+const agents = {};   // key -> {data, group, ring, label, faceGrp, target, speed, wanderT, bob}
+function makeFace(mood){
+  // mặt cute: 2 mắt + miệng, vẽ trên canvas → plane dán trước mặt
+  const cv = document.createElement('canvas'); cv.width=128; cv.height=128;
+  const g = cv.getContext('2d');
+  g.clearRect(0,0,128,128);
+  // mắt
+  const eyeY = 52, eyeDX = 26;
+  [[64-eyeDX,eyeY],[64+eyeDX,eyeY]].forEach(([x,y])=>{
+    g.fillStyle='#fff'; g.beginPath(); g.arc(x,y,17,0,7); g.fill();
+    g.fillStyle='#1a1a2e'; g.beginPath(); g.arc(x,y+2,8,0,7); g.fill();
+    g.fillStyle='#fff'; g.beginPath(); g.arc(x-3,y-1,3,0,7); g.fill();
+  });
+  // miệng theo mood
+  g.strokeStyle='#1a1a2e'; g.lineWidth=5; g.lineCap='round';
+  g.beginPath();
+  if(mood==='busy'){ g.arc(64,78,16,0.15*Math.PI,0.85*Math.PI); }        // cười tươi
+  else if(mood==='error'){ g.arc(64,100,14,1.15*Math.PI,1.85*Math.PI); } // mếu
+  else { g.arc(64,74,15,0.2*Math.PI,0.8*Math.PI); }                       // cười nhẹ
+  g.stroke();
+  // má hồng
+  g.fillStyle='rgba(255,120,150,0.45)';
+  g.beginPath(); g.arc(64-eyeDX-14,78,9,0,7); g.fill();
+  g.beginPath(); g.arc(64+eyeDX+14,78,9,0,7); g.fill();
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.SpriteMaterial({map:tex, transparent:true, depthTest:false});
+}
 function buildAgent(a){
   const g = new THREE.Group();
   const col = new THREE.Color(a.color);
+  const isMain = !!a.is_main;
+  const R = isMain ? 0.85 : 0.62;   // Muse to hơn 1 chút
+  // thân tròn cute (blob)
   const body = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.42, 0.58, 1.2, 20),
-    new THREE.MeshStandardMaterial({color:col, roughness:.45, metalness:.15}));
-  body.position.y = 0.78; body.castShadow = true; g.add(body);
-  const head = new THREE.Mesh(
-    new THREE.SphereGeometry(0.37, 20, 16),
-    new THREE.MeshStandardMaterial({color:col.clone().multiplyScalar(1.4), roughness:.35}));
-  head.position.y = 1.72; head.castShadow = true; g.add(head);
+    new THREE.SphereGeometry(R, 24, 18),
+    new THREE.MeshStandardMaterial({color:col, roughness:.4, metalness:.1}));
+  body.position.y = R + 0.12; body.castShadow = true; g.add(body);
+  // mặt dán phía trước
+  const faceMat = makeFace(a.status);
+  const face = new THREE.Sprite(faceMat);
+  face.scale.set(R*1.5, R*1.5, 1);
+  face.position.set(0, R + 0.22, R*0.82); face.renderOrder = 6;
+  g.add(face);
+  // chân nhỏ 2 bên
+  const footG = new THREE.SphereGeometry(R*0.22, 12, 10);
+  const footM = new THREE.MeshStandardMaterial({color:col.clone().multiplyScalar(0.7), roughness:.5});
+  [-1,1].forEach(s=>{
+    const f = new THREE.Mesh(footG, footM);
+    f.position.set(s*R*0.42, R*0.2, 0); f.castShadow = true; g.add(f);
+  });
+  // vòng trạng thái dưới chân
   const ring = new THREE.Mesh(
-    new THREE.RingGeometry(0.68, 0.88, 40),
-    new THREE.MeshBasicMaterial({color:0x22c55e, transparent:true, opacity:.9, side:THREE.DoubleSide}));
+    new THREE.RingGeometry(R+0.12, R+0.3, 40),
+    new THREE.MeshBasicMaterial({color:ST_COLOR[a.status]||0x22c55e,
+      transparent:true, opacity:.9, side:THREE.DoubleSide}));
   ring.rotation.x = -Math.PI/2; ring.position.y = 0.04; g.add(ring);
-  const label = makeLabel(a.char+' '+a.name, 0.85);
-  label.position.y = 2.5; g.add(label);
-  const z = zoneOf(a.dept);
-  g.position.set(z.x + (Math.random()*4-2), 0, z.z + (Math.random()*3-1));
+  // label tên + token/cost
+  const t30 = (a.tokens && a.tokens[30]) || {};
+  const tokTxt = t30.tokens ? ' 🎟️'+fmtT(t30.tokens)+' · $'+(t30.cost||0) : '';
+  const refill = a.key==='muse_main' ? ' 🔄refill tuần' : '';
+  const label = makeLabel(a.char+' '+a.name+tokTxt+refill, isMain?1.0:0.85);
+  label.position.y = R*2 + 1.35; g.add(label);
+  // vị trí: Muse ở giữa, các con khác ở phòng ban
+  let px, pz;
+  if(isMain){ px = 0; pz = 0; }
+  else { const z = zoneOf(a.dept); px = z.x+(Math.random()*4-2); pz = z.z+(Math.random()*3-1); }
+  g.position.set(px, 0, pz);
   scene.add(g);
-  agents[a.key] = {data:a, group:g, ring:ring, label:label,
+  agents[a.key] = {data:a, group:g, ring:ring, label:label, face:face, faceMat:faceMat,
     target:g.position.clone(), speed:3.4, wanderT:performance.now()/1000 + Math.random()*5,
-    bob:Math.random()*6, prevStatus:a.status};
+    bob:Math.random()*6, prevStatus:a.status, bubbleT:0, bubble:null};
 }
 STATE.agents.forEach(buildAgent);
+
+// ---------- robot nhỏ đi hành lang (như video) ----------
+const robot = (()=>{
+  const g = new THREE.Group();
+  const mBody = new THREE.MeshStandardMaterial({color:0x94a3b8, roughness:.35, metalness:.6});
+  const mDark = new THREE.MeshStandardMaterial({color:0x334155, roughness:.5, metalness:.4});
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.55,0.7,0.45), mBody);
+  body.position.y = 0.55; body.castShadow = true; g.add(body);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.4,0.4), mDark);
+  head.position.y = 1.1; head.castShadow = true; g.add(head);
+  // mắt robot (đèn xanh)
+  const eyeM = new THREE.MeshBasicMaterial({color:0x22d3ee});
+  [-1,1].forEach(s=>{
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.07,10,8), eyeM);
+    e.position.set(s*0.13, 1.12, 0.21); g.add(e);
+  });
+  // ăng-ten
+  const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,0.3,8), mDark);
+  ant.position.y = 1.45; g.add(ant);
+  const tip = new THREE.Mesh(new THREE.SphereGeometry(0.05,8,8),
+    new THREE.MeshBasicMaterial({color:0xef4444}));
+  tip.position.y = 1.62; g.add(tip);
+  // bánh xe
+  const wheelG = new THREE.CylinderGeometry(0.14,0.14,0.1,14);
+  [-1,1].forEach(s=>{
+    const w = new THREE.Mesh(wheelG, mDark);
+    w.rotation.z = Math.PI/2; w.position.set(s*0.3, 0.14, 0); g.add(w);
+  });
+  const lab = makeLabel('🤖 Robot', 0.6); lab.position.y = 2.0; g.add(lab);
+  g.position.set(0, 0, 0); scene.add(g);
+  return {group:g, target:new THREE.Vector3(5,0,5), speed:2.6,
+          wanderT:performance.now()/1000+2, tip:tip};
+})();
+
+// ---------- bong bóng thoại (như video) ----------
+const SPEECHES = ['Số liệu khớp số rồi!','Giỏi lắm!','Xong việc! ✅','Đang chạy… 🔄',
+  'Để em lo! 💪','Báo cáo xong! 📝','Tiết kiệm được $! 💵','Ổn hết anh ơi! 👍'];
+function showBubble(ag){
+  if(ag.bubble){ ag.group.remove(ag.bubble); ag.bubble = null; }
+  const txt = SPEECHES[Math.floor(Math.random()*SPEECHES.length)];
+  const cv = document.createElement('canvas'); cv.width=512; cv.height=160;
+  const c = cv.getContext('2d');
+  c.fillStyle='rgba(255,255,255,0.95)';
+  c.beginPath(); c.roundRect(10,10,492,110,28); c.fill();
+  // đuôi bong bóng
+  c.beginPath(); c.moveTo(230,118); c.lineTo(256,150); c.lineTo(282,118); c.fill();
+  c.font='bold 44px "Segoe UI",sans-serif'; c.textAlign='center'; c.textBaseline='middle';
+  c.fillStyle='#1a1a2e'; c.fillText(txt, 256, 66);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:tex, transparent:true, depthTest:false}));
+  sp.scale.set(4.2, 1.3, 1); sp.renderOrder = 7;
+  const R = ag.data.is_main ? 0.85 : 0.62;
+  sp.position.y = R*2 + 2.6;
+  ag.group.add(sp); ag.bubble = sp;
+  ag.bubbleT = performance.now()/1000 + 3.5;  // hiện 3.5s
+}
 
 function deskFront(zoneId){
   const z = zoneOf(zoneId);
@@ -1716,9 +1843,12 @@ function renderPanels(){
   $('agent-list').innerHTML = S.agents.map(a=>{
     const t = ST_TXT[a.status]||ST_TXT.stale;
     const t1=a.tokens[1]||{}, t7=a.tokens[7]||{}, t30=a.tokens[30]||{};
+    const cost30 = t30.cost ? ' · 💵$'+t30.cost : '';
+    const refill = a.key==='muse_main' ? ' <span class="st st-ready">🔄 refill tuần</span>' : '';
+    const prepaid = a.prepaid ? '<br><span class="tok">💰 Prepaid (không refill)</span>' : '';
     return '<div class="agent-row"><span class="agent-dot" style="background:'+a.color+'"></span>'+
-     '<span><span class="an">'+a.char+' '+a.name+'</span><br><span class="tok">1d:'+fmtT(t1.tokens)+
-     ' · 7d:'+fmtT(t7.tokens)+' · 30d:'+fmtT(t30.tokens)+'</span></span>'+
+     '<span><span class="an">'+a.char+' '+a.name+'</span>'+refill+'<br><span class="tok">🎟️ 1d:'+fmtT(t1.tokens)+
+     ' · 7d:'+fmtT(t7.tokens)+' · 30d:'+fmtT(t30.tokens)+cost30+'</span>'+prepaid+'</span>'+
      '<span class="st '+t[1]+'">'+t[0]+'</span></div>';
   }).join('');
   // finance
@@ -1811,6 +1941,30 @@ function animate(){
   // hiệu ứng màn hình EC khi đang chạy
   const zec = zoneOf('ec');
   if(zec._screen) zec._screen.material.emissiveIntensity = ecRunning() ? 1.3+Math.sin(t*4)*0.4 : 0.45;
+  // robot đi hành lang (khu trung tâm giữa các phòng)
+  {
+    const rp = robot.group.position, rt = robot.target;
+    const dx = rt.x-rp.x, dz = rt.z-rp.z, dist = Math.hypot(dx,dz);
+    if(dist > 0.15){
+      const step = Math.min(dist, robot.speed*dt);
+      rp.x += dx/dist*step; rp.z += dz/dist*step;
+      robot.group.rotation.y = Math.atan2(dx, dz);
+      rp.y = Math.abs(Math.sin(t*9))*0.05;
+    } else if(SET.autoMove && now > robot.wanderT){
+      // đi ngẫu nhiên quanh trung tâm (hành lang)
+      robot.target.set(Math.random()*20-10, 0, Math.random()*12-6);
+      robot.wanderT = now + 5 + Math.random()*7;
+    }
+    robot.tip.material.color.setHex(Math.sin(t*6)>0 ? 0xef4444 : 0x22c55e);
+  }
+  // bong bóng thoại ngẫu nhiên
+  Object.values(agents).forEach(ag=>{
+    if(ag.bubble && now > ag.bubbleT){
+      ag.group.remove(ag.bubble); ag.bubble = null;
+    } else if(!ag.bubble && SET.autoMove && Math.random() < dt*0.03){
+      showBubble(ag);
+    }
+  });
   controls.update();
   renderer.render(scene, camera);
 }
@@ -1842,7 +1996,7 @@ if(!SET.labels) Object.values(agents).forEach(a=>a.label.visible=false);
 
 // ---------- chat ----------
 const AGENT_META = {gemini:['🦊','Gemini'], muse:['🦉','Muse'], deepseek:['🦈','DeepSeek'],
-                    claude:['🐯','Claude'], lmstudio:['🐸','LM Studio']};
+                    lmstudio:['🐸','LM Studio'], muse_main:['🤖','Muse']};
 $('chat-bubble').onclick = ()=>{
   const p=$('chat-panel'); p.classList.toggle('open');
   if(p.classList.contains('open') && !$('chat-msgs').children.length) loadHistory();
@@ -1992,8 +2146,6 @@ $('chat-form').onsubmit = async e=>{
              "✅ Điều phối + Duyệt chi"),
             ("deepseek", "🦈", "DeepSeek", "#39c5ff", "Cá mập tinh mắt",
              "🔍 Soi công nợ"),
-            ("claude", "🐯", "Claude", "#ff9f43", "Hổ cẩn thận",
-             "📝 Lập báo cáo"),
             ("lmstudio", "🐸", "LM Studio", "#3ddc84", "Ếch tốc độ",
              "⚡ Trả lời nhanh"),
         ]
@@ -2255,6 +2407,15 @@ $('chat-form').onsubmit = async e=>{
             lead_tag = ("<div class='ofc-lead-tag'>👔 TRƯỞNG PHÒNG</div>"
                         if lead else "")
             lead_cls = " ofc-lead" if lead else ""
+            # token + chi phí
+            _tk = tok.get(key, {})
+            _t30 = _tk.get(30, {})
+            _tok_html = ""
+            if _t30.get("tokens"):
+                _c = _t30.get("cost", 0)
+                _cost_txt = f" · 💵${_c:.4f}" if _c else ""
+                _tok_html = (f"<div class='ofc-tok'>🎟️ {fmt_num(_t30['tokens'])}"
+                             f"{_cost_txt}</div>")
             return (
                 f"<a class='ofc-desk {cls}{lead_cls}' href='/chat'>"
                 f"{lead_tag}"
@@ -2262,7 +2423,7 @@ $('chat-form').onsubmit = async e=>{
                 f"<div class='ofc-name' style='border-color:{color}'>"
                 f"<span class='ofc-dot' style='background:{color}'></span>"
                 f"{html.escape(name)}</div>"
-                f"<div class='ofc-role'>{role}</div>{badge}</a>")
+                f"<div class='ofc-role'>{role}</div>{badge}{_tok_html}</a>")
 
         sections = []
 
@@ -2282,26 +2443,23 @@ $('chat-form').onsubmit = async e=>{
         section("🏦", "Kế Toán & Tài Chính", bool(fin), m_ketoan, [
             desk("gemini", "🦊", "Gemini", C["gemini"], "📊 Phân tích chi tiêu", lead=True),
             desk("deepseek", "🦈", "DeepSeek", C["deepseek"], "🔍 Soi công nợ"),
-            desk("claude", "🐯", "Claude", C["claude"], "📝 Lập báo cáo"),
             desk("lmstudio", "🐸", "LM Studio", C["lmstudio"], "⚡ Trả lời nhanh")])
         section("💾", "Kỹ Thuật & Lưu Trữ", False, soon(), [
-            desk("claude", "🖥️", "Claude", C["claude"], "💽 Giám sát ổ cứng", lead=True),
+            desk("lmstudio", "🖥️", "LM Studio", C["lmstudio"], "💽 Giám sát ổ cứng", lead=True),
             desk("lmstudio", "🗜️", "LM Studio", C["lmstudio"], "🗂️ Phân loại & dọn file")])
         section("🎬", "Hậu Kỳ & Sản Xuất", False, soon(), [
-            desk("gemini", "🎞️", "Gemini", C["gemini"], "✂️ Dựng & cắt ghép", lead=True),
-            desk("claude", "🎨", "Claude", C["claude"], "🖌️ Retouch & màu sắc")])
+            desk("gemini", "🎞️", "Gemini", C["gemini"], "✂️ Dựng & cắt ghép", lead=True)])
         section("📱", "App & Mobile", False, soon(), [
             desk("muse", "📲", "Muse", C["muse"], "🔨 Build & test app", lead=True),
             desk("deepseek", "🐞", "DeepSeek", C["deepseek"], "🔍 Soi bug & review code")])
         section("📣", "Social & Marketing", False, soon(), [
-            desk("gemini", "📢", "Gemini", C["gemini"], "✍️ Viết bài social", lead=True),
-            desk("claude", "🖼️", "Claude", C["claude"], "🎨 Portfolio & Behance")])
+            desk("gemini", "📢", "Gemini", C["gemini"], "✍️ Viết bài social", lead=True)])
         section("📅", "Lịch & Điều Hành", bool(fin) or n_events is not None, m_lich, [
             desk("muse", "🗓️", "Muse", C["muse"], "🎬 Điều phối show", lead=True),
             desk("gemini", "⏰", "Gemini", C["gemini"], "📅 Theo dõi lịch"),
             desk("deepseek", "👷", "DeepSeek", C["deepseek"], "💵 Crew & lương")])
         section("🗄️", "Phòng Dữ Liệu", drive_n is not None, m_data, [
-            desk("claude", "🗂️", "Claude", C["claude"], "📁 Kho Drive: index & tìm kiếm", lead=True),
+            desk("muse", "🗂️", "Muse", C["muse"], "📁 Kho Drive: index & tìm kiếm", lead=True),
             desk("muse", "🔄", "Muse", C["muse"], "🔗 Đồng bộ Finance↔Drive↔Orchestra"),
             desk("deepseek", "📈", "DeepSeek", C["deepseek"], "📊 Phân tích & báo cáo"),
             desk("lmstudio", "🛡️", "LM Studio", C["lmstudio"], "💾 Backup & an toàn")])
@@ -2511,7 +2669,6 @@ $('chat-form').onsubmit = async e=>{
               <option value="muse">🟣 Muse</option>
               <option value="lmstudio">🟢 LM Studio</option>
               <option value="deepseek">🔷 DeepSeek</option>
-              <option value="claude">🟠 Claude</option>
             </select>
             <button id="ofc-min" title="Thu gọn">—</button>
           </div>
@@ -2589,12 +2746,12 @@ loadH();
         # ----- sơ đồ tổ chức -----
         org_leads = [
             ("🦊", "Gemini", C["gemini"], "Kế Toán"),
-            ("🐯", "Claude", C["claude"], "Kỹ Thuật"),
+            ("🐸", "LM Studio", C["lmstudio"], "Kỹ Thuật"),
             ("🦊", "Gemini", C["gemini"], "Hậu Kỳ"),
             ("🦉", "Muse", C["muse"], "App"),
             ("🦊", "Gemini", C["gemini"], "Social"),
             ("🦉", "Muse", C["muse"], "Lịch"),
-            ("🐯", "Claude", C["claude"], "Dữ Liệu"),
+            ("🦉", "Muse", C["muse"], "Dữ Liệu"),
         ]
         org_html = "".join(
             f"<div class='ofc-org-node'><div class='ofc-org-char'>{ch}</div>"
