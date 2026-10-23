@@ -123,7 +123,9 @@ def search(query: str, limit: int = 15) -> list:
                WHERE drive_index_fts MATCH ? LIMIT ?""",
             (fts_q, limit)).fetchall()
     except Exception:
-        # fallback LIKE nếu FTS lỗi
+        rows = []
+    if not rows:
+        # fallback LIKE (khi FTS chưa build xong hoặc không khớp)
         like = f"%{query}%"
         rows = con.execute(
             """SELECT id, name, mime_type, path, size, modified_time, web_link
@@ -135,8 +137,11 @@ def search(query: str, limit: int = 15) -> list:
 
 def index_status() -> dict:
     con = _db()
-    row = con.execute(
-        "SELECT v FROM drive_index_meta WHERE k='last_build'").fetchone()
+    try:
+        row = con.execute(
+            "SELECT v FROM drive_index_meta WHERE k='last_build'").fetchone()
+    except Exception:
+        row = None
     n = con.execute("SELECT COUNT(*) FROM drive_index").fetchone()[0]
     con.close()
     return {"count": n,
