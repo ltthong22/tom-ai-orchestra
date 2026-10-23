@@ -208,9 +208,35 @@ NAV_ITEMS = [
     ("/new", "➕", "Giao việc"),
     ("/history", "📜", "Lịch sử"),
     ("/tokens", "🎟️", "Token Usage"),
+    ("/ai-office", "🏢", "Văn Phòng AI"),
     ("/skills", "🧠", "Skills"),
     ("/settings", "⚙️", "Cài đặt"),
 ]
+
+# ---------- KHO KIẾN THỨC CHUNG: mọi agent đều học ----------
+# Quy tắc nghiệp vụ studio (anh Thống chốt) — inject vào mọi prompt agent.
+STUDIO_RULES = {
+    "hop_dong": "HĐ video mã A1xxx, HĐ photo mã B1xxx.",
+    "coc": "Cọc 50%, thanh toán 3 đợt.",
+    "nghiem_thu": "Nghiệm thu tự động sau 3 ngày, 2 lần sửa free, lưu file trên Drive 1 năm.",
+    "rule_30_30": "Đến sớm 30 phút trước giờ job; job xa >50km thì nghỉ thêm 30 phút.",
+    "gio_job": "Job sáng/full-day bắt đầu 7:00–7:30.",
+    "cuoi": "Cưới: PS Cưới nhà gái ~7:00 trước nhà trai (~8:30); TT Cưới nhà trai trước.",
+    "lich": "Tiêu đề lịch KHÔNG dùng từ 'chụp'; show chưa cọc thêm tiền tố '(Chưa cọc)'.",
+    "tien_show": "Tiền show/job về thẳng VCB.",
+    "tach_bach": "Thu show và mua gear TÁCH BẠCH TUYỆT ĐỐI — không bù trừ công nợ với mua sắm.",
+    "cuoi_tuan": "Thứ 7 + Chủ nhật ưu tiên job CÓ TIỀN, không nhận việc không lương.",
+    "xung_ho": "Xưng 'em', gọi user là 'anh'.",
+    "phieu": "Phiếu xác nhận: không ghi tên crew, không lộ lương/đơn giá nhân sự.",
+}
+
+
+def studio_rules_text():
+    """Render quy tắc studio thành text để inject vào prompt agent."""
+    lines = ["[QUY TẮC STUDIO — tuân thủ khi trả lời/làm việc]"]
+    for k, v in STUDIO_RULES.items():
+        lines.append(f"- {v}")
+    return "\n".join(lines)
 
 
 def page(title, body, active="/", user=""):
@@ -307,6 +333,13 @@ class H(BaseHTTPRequestHandler):
             self._history(user); return
         if p == "/tokens":
             self._tokens_page(user, q); return
+        if p == "/ai-office":
+            self._ai_office(user); return
+        if p == "/accounting-room":
+            self.send_response(302)
+            self.send_header("Location", "/ai-office")
+            self.end_headers()
+            return
         if p == "/skills":
             self._skills_page(user, q.get("q", [""])[0], q.get("name", [""])[0]); return
         if p == "/settings":
@@ -317,6 +350,29 @@ class H(BaseHTTPRequestHandler):
             self._chat_page(user); return
         if p == "/api/chat/history":
             self._api_chat_history(); return
+        if p == "/api/kb/reload":
+            import json as _json
+            try:
+                from data_providers.knowledge import force_reload
+                kb = force_reload()
+                body = _json.dumps({"ok": True,
+                                    "skills": kb["counts"].get("skills", 0),
+                                    "loaded_at": kb.get("loaded_at", "")}).encode()
+            except Exception as e:
+                body = _json.dumps({"ok": False, "error": str(e)}).encode()
+            self._send(body, 200, "application/json; charset=utf-8"); return
+        if p == "/api/kb/approve":
+            import json as _json, os as _os, shutil as _sh
+            fn = q.get("f", [""])[0].replace("/", "").replace("\\", "")
+            try:
+                src = _os.path.join(_os.path.expanduser("~/workspace/task-bus/pending"), fn)
+                dst = _os.path.join(_os.path.expanduser("~/workspace/task-bus/done"), fn)
+                _os.makedirs(_os.path.dirname(dst), exist_ok=True)
+                _sh.move(src, dst)
+                body = _json.dumps({"ok": True}).encode()
+            except Exception as e:
+                body = _json.dumps({"ok": False, "error": str(e)}).encode()
+            self._send(body, 200, "application/json; charset=utf-8"); return
         if p == "/logout":
             destroy_session(self._cookie_token())
             self.send_response(302)
@@ -445,13 +501,20 @@ class H(BaseHTTPRequestHandler):
                 # lưu tin user
                 save_message("user", msg)
                 # inject dữ liệu thật khi câu hỏi liên quan (data_providers)
+                # + KHO KIẾN THỨC CHUNG (Drive) — mọi agent đều học
                 prompt = msg
                 try:
+                    try:
+                        from data_providers.knowledge import agent_context
+                        kb_ctx = agent_context()
+                    except Exception:
+                        kb_ctx = studio_rules_text()
                     ctx = self._data_context(msg)
+                    parts = [kb_ctx]
                     if ctx:
-                        prompt = (f"[DỮ LIỆU THẬT — dùng để trả lời, "
-                                  f"không bịa số]\n{ctx}\n\n"
-                                  f"[CÂU HỎI]\n{msg}")
+                        parts.append(f"[DỮ LIỆU THẬT — dùng để trả lời, không bịa số]\n{ctx}")
+                    parts.append(f"[CÂU HỎI]\n{msg}")
+                    prompt = "\n\n".join(parts)
                 except Exception:
                     pass
                 # chọn agent: auto -> dùng pick_agent, hoặc ép agent cụ thể
@@ -481,7 +544,7 @@ class H(BaseHTTPRequestHandler):
     def _chat_page(self, user):
         csrf = self._csrf_token() or ""
         _body = """
-<h1>💬 Chat AI</h1>
+<h1>💬 Chat AI <a href="/ai-office" style="font-size:14px;font-weight:600;color:#4aa8ff;text-decoration:none;border:1px solid #4aa8ff;border-radius:20px;padding:4px 14px;">🏢 Văn Phòng</a></h1>
 <p class="muted">Nhắn như Messenger — mỗi AI có màu + avatar riêng, thấy rõ ai đang trả lời.</p>
 
 <div class="chat-wrap">
@@ -1060,6 +1123,939 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
             f"<p class='muted' style='margin-top:12px'>Số liệu từ bảng token_usage · "
             f"LM Studio chạy local nên miễn phí · một số dòng là ước lượng (estimated=1).</p>",
             active="/tokens", user=user))
+
+    def _accounting_room(self, user):
+        """🏦 Phòng Kế Toán AI — 5 agent, mỗi con 1 bàn + nhiệm vụ kế toán riêng."""
+        # --- số liệu tài chính ---
+        fin_stats = {}
+        try:
+            from data_providers.finance_data import fetch_dashboard, is_configured
+            if is_configured():
+                d = fetch_dashboard()
+                if d:
+                    fin_stats = d.get("stats", {})
+        except Exception:
+            fin_stats = {}
+        # --- token hôm nay ---
+        today_tokens = {}
+        try:
+            from data_providers.token_stats import get_stats
+            s = get_stats(1)
+            for a, v in s.get("by_ai", {}).items():
+                today_tokens[a] = {"tokens": v["in"] + v["out"], "calls": v["calls"]}
+        except Exception:
+            pass
+        # --- trạng thái busy/idle từ router ---
+        inflight = {}
+        try:
+            from orchestrator.router import get_router
+            for a in get_router().all_stats():
+                inflight[a["agent"]] = a.get("in_flight", 0)
+        except Exception:
+            pass
+        # ---------- kho kiến thức chung (Drive) ----------
+        kb_status = {"skills": 0, "rules": 0, "loaded_at": "?"}
+        kb_link = "https://drive.google.com/drive/folders/1GYwsn2uiQ817qYRlZuFsCLUC9eJBk-nO"
+        try:
+            from data_providers.knowledge import status as kb_status_fn
+            kb_status = kb_status_fn()
+            kb_link = kb_status.get("drive_link", kb_link)
+        except Exception:
+            pass
+        n_events = None
+        try:
+            from data_providers.calendar_data import upcoming
+            n_events = len(upcoming(7))
+        except Exception:
+            pass
+        drive_n, drive_built = None, None
+        try:
+            from data_providers.drive_index import index_status
+            st = index_status()
+            drive_n, drive_built = st.get("count", 0), st.get("last_build")
+        except Exception:
+            pass
+        inflight = {}
+        try:
+            from orchestrator.router import get_router
+            for a in get_router().all_stats():
+                inflight[a["agent"]] = a.get("in_flight", 0)
+        except Exception:
+            pass
+
+        AGENTS = [
+            ("gemini",   "🦊", "Gemini",    "#4aa8ff", "📊 Phân tích chi tiêu"),
+            ("muse",     "🦉", "Muse",      "#b07bff", "✅ Điều phối + Duyệt chi"),
+            ("deepseek", "🦈", "DeepSeek",  "#39c5ff", "🔍 Soi công nợ"),
+            ("claude",   "🐯", "Claude",    "#ff9f43", "📝 Lập báo cáo"),
+            ("lmstudio", "🐸", "LM Studio", "#3ddc84", "⚡ Trả lời nhanh"),
+        ]
+        desks = []
+        for key, char, name, color, role in AGENTS:
+            busy = inflight.get(key, 0) > 0
+            t = today_tokens.get(key)
+            if busy:
+                badge = "<span class='ar-badge ar-busy'>🔄 ĐANG LÀM</span>"
+            else:
+                badge = "<span class='ar-badge ar-idle'>💤 RẢNH</span>"
+            tok_txt = f"{fmt_num(t['tokens'])} token · {t['calls']} calls" if t else "chưa xài token"
+            desks.append(
+                f"<div class='ar-desk'>"
+                f"<div class='ar-char'>{char}</div>"
+                f"<div class='ar-name' style='border-color:{color}'>"
+                f"<span class='ar-dot' style='background:{color}'></span>{name}</div>"
+                f"<div class='ar-role'>{role}</div>"
+                f"{badge}"
+                f"<div class='ar-tok'>🎟️ {tok_txt}</div>"
+                f"</div>")
+
+        fin_cards = ""
+        if fin_stats:
+            for k, v in list(fin_stats.items())[:6]:
+                fin_cards += (f"<div class='ar-fin'><div class='ar-fin-k'>{html.escape(k)}</div>"
+                              f"<div class='ar-fin-v'>{html.escape(v)}</div></div>")
+        else:
+            fin_cards = ("<div class='ar-fin'><div class='ar-fin-k'>Finance Manager</div>"
+                         "<div class='ar-fin-v'>chưa nối</div></div>")
+
+        css = """
+        .ar-live{color:#3ddc84;font-weight:600;}
+        .ar-fin-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;}
+        .ar-fin{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:8px 10px;}
+        .ar-fin-k{font-size:11px;color:var(--muted);}
+        .ar-fin-v{font-size:15px;font-weight:700;}
+        .ar-room{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;background:var(--card);
+          border:1px solid var(--border);border-radius:16px;padding:14px;
+          background-image:radial-gradient(circle at 50% 0%,rgba(74,168,255,.08),transparent 70%);}
+        .ar-desk{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;
+          padding:10px 6px;text-align:center;}
+        .ar-char{font-size:44px;line-height:1.2;filter:drop-shadow(0 2px 6px rgba(0,0,0,.4));}
+        .ar-name{font-weight:700;margin-top:6px;padding:4px;border-bottom:3px solid;border-radius:6px;}
+        .ar-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;}
+        .ar-role{font-size:12px;color:var(--muted);margin:6px 0;}
+        .ar-badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;}
+        .ar-busy{background:#123f2b;color:#3ddc84;animation:ar-pulse 1.6s infinite;}
+        .ar-idle{background:#3a3f47;color:#9aa0a6;}
+        .ar-tok{font-size:11px;color:var(--muted);margin-top:6px;}
+        @keyframes ar-pulse{0%,100%{opacity:1}50%{opacity:.55}}
+        @media(max-width:700px){.ar-room{grid-template-columns:repeat(2,1fr);}.ar-fin-strip{grid-template-columns:repeat(2,1fr);}}
+        """
+        body = (f"<style>{css}</style>"
+                f"<h1>🏦 Phòng Kế Toán AI <span class='ar-live'>● LIVE</span></h1>"
+                f"<p class='muted'>Mỗi AI 1 bàn, 1 nhiệm vụ kế toán · tự refresh 30s</p>"
+                f"<div class='ar-fin-strip'>{fin_cards}</div>"
+                f"<div class='ar-room'>{''.join(desks)}</div>"
+                f"<script>setTimeout(()=>location.reload(),30000)</script>")
+        self._send(page("Phòng Kế Toán AI", body, active="/accounting-room", user=user))
+
+    def _ai_office(self, user):
+        """🏢 Văn Phòng AI — nhân vật là trung tâm, thống nhất với Orchestra."""
+        import re, subprocess, json as _json, time as _time, os as _os
+        csrf = self._csrf_token() or ""
+        # ---------- dữ liệu tài chính ----------
+        fin, overdue = {}, []
+        try:
+            from data_providers.finance_data import fetch_dashboard, is_configured
+            if is_configured():
+                d = fetch_dashboard()
+                if d:
+                    fin = d.get("stats", {})
+                    overdue = d.get("overdue", [])
+        except Exception:
+            pass
+        # ---------- token stats chi tiết: 1 / 7 / 30 ngày ----------
+        tok = {}
+        try:
+            from data_providers.token_stats import get_stats
+            for days in (1, 7, 30):
+                s = get_stats(days)
+                for a, v in s.get("by_ai", {}).items():
+                    tok.setdefault(a, {})[days] = {
+                        "tokens": v["in"] + v["out"],
+                        "calls": v["calls"],
+                        "cost": v.get("cost_usd", 0),
+                    }
+                if days == 1:
+                    total_tok = s.get("total_tokens", 0)
+                    total_cost = s.get("total_cost_usd", 0)
+        except Exception:
+            total_tok, total_cost = 0, 0
+
+        # ---------- dung lượng ổ G/H/J từ sheet Kho Ổ Cứng (cache 2h) ----------
+        drives = {}
+        _cache = "/tmp/ofc-drive-cache.json"
+        try:
+            use_cache = (_os.path.exists(_cache)
+                         and _time.time() - _os.path.getmtime(_cache) < 7200)
+            if use_cache:
+                drives = _json.load(open(_cache))
+            else:
+                r = subprocess.run(
+                    ["/opt/hatch/bin/hatch_gws_cli", "sheets", "spreadsheets",
+                     "values", "get", "--params", _json.dumps({
+                         "spreadsheetId": "1iACXzX7gqhEwZhbn5FMKbILplKOLuD7okEJ5db10TIc",
+                         "range": "Tổng quan!A1:F12"})],
+                    capture_output=True, text=True, timeout=15)
+                vals = _json.loads(r.stdout).get("values", [])
+                for row in vals[1:]:
+                    if len(row) >= 5 and row[0] in ("G", "H", "J"):
+                        try:
+                            drives[row[0]] = {
+                                "free": float(row[3].replace(",", ".")),
+                                "total": float(row[1].replace(",", ".")),
+                                "pct": int(row[4].replace("%", "")),
+                            }
+                        except Exception:
+                            pass
+                if drives:
+                    _json.dump(drives, open(_cache, "w"))
+        except Exception:
+            pass
+        # ---------- kho kiến thức chung (Drive) ----------
+        kb_status = {"skills": 0, "rules": 0, "loaded_at": "?"}
+        kb_link = "https://drive.google.com/drive/folders/1GYwsn2uiQ817qYRlZuFsCLUC9eJBk-nO"
+        try:
+            from data_providers.knowledge import status as kb_status_fn
+            kb_status = kb_status_fn()
+            kb_link = kb_status.get("drive_link", kb_link)
+        except Exception:
+            pass
+        n_events = None
+        try:
+            from data_providers.calendar_data import upcoming
+            n_events = len(upcoming(7))
+        except Exception:
+            pass
+        drive_n, drive_built = None, None
+        try:
+            from data_providers.drive_index import index_status
+            st = index_status()
+            drive_n, drive_built = st.get("count", 0), st.get("last_build")
+        except Exception:
+            pass
+
+        def _num(t):
+            dd = re.sub(r"[^\d]", "", t or "")
+            return int(dd) if dd else 0
+
+        def _vnd(n):
+            return f"{n:,}".replace(",", ".") + "đ"
+
+        # 5 nhân vật chính = 5 AI agent thật của Orchestra
+        AGENTS = [
+            ("gemini", "🦊", "Gemini", "#4aa8ff", "Cáo lanh lợi",
+             "📊 Phân tích chi tiêu"),
+            ("muse", "🦉", "Muse", "#b07bff", "Cú điềm tĩnh",
+             "✅ Điều phối + Duyệt chi"),
+            ("deepseek", "🦈", "DeepSeek", "#39c5ff", "Cá mập tinh mắt",
+             "🔍 Soi công nợ"),
+            ("claude", "🐯", "Claude", "#ff9f43", "Hổ cẩn thận",
+             "📝 Lập báo cáo"),
+            ("lmstudio", "🐸", "LM Studio", "#3ddc84", "Ếch tốc độ",
+             "⚡ Trả lời nhanh"),
+        ]
+        C = {k: c for k, _, _, c, _, _ in AGENTS}
+        # ---------- Cấp bậc + hiệu suất agent (đúng bản chất AI) ----------
+        # AI KHÔNG có lương/nghỉ việc/tinh thần kiểu người.
+        # Thăng cấp = mở rộng quyền hạn. Trạng thái = vận hành.
+        RANKS = ["Thực tập sinh", "Nhân viên", "Chuyên viên",
+                 "Trưởng nhóm", "Trưởng phòng", "Giám đốc"]
+        RANK_PERM = {
+            0: "Chỉ làm task đơn giản",
+            1: "Task thông thường",
+            2: "Task phức tạp",
+            3: "Điều phối nhóm nhỏ",
+            4: "Quản lý phòng ban (tối đa 15 NV)",
+            5: "Điều phối toàn bộ",
+        }
+        RANK_PROMO = {
+            0: "Cần: 10 task xong, tỷ lệ thành công ≥ 90%",
+            1: "Cần: 30 task xong, tỷ lệ thành công ≥ 92%",
+            2: "Cần: 60 task xong, tỷ lệ thành công ≥ 95%",
+            3: "Cần: 100 task xong, tỷ lệ thành công ≥ 95%",
+            4: "Cần: 150 task xong, tỷ lệ thành công ≥ 97%",
+            5: "Tối cao",
+        }
+        rpg = {"agents": {}, "company": {"reputation": 82}}
+        _rpg_path = os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), "data", "agent_rpg.json")
+        try:
+            rpg = _json.load(open(_rpg_path))
+        except Exception:
+            pass
+        # hiệu suất từ router stats thật: calls, fails, avg_ms
+        agent_perf, agent_rank, agent_status = {}, {}, {}
+        _router_stats = {}
+        try:
+            from orchestrator.router import get_router
+            for s in get_router().all_stats():
+                _router_stats[s["agent"]] = s
+        except Exception:
+            pass
+        # inflight cho các phần khác dùng
+        inflight = {a: s.get("in_flight", 0)
+                    for a, s in _router_stats.items()}
+        for key, _, _, _, _, _ in AGENTS:
+            rd = rpg.get("agents", {}).get(key, {})
+            rank = rd.get("rank", 1)
+            st = _router_stats.get(key, {})
+            calls = st.get("calls", 0)
+            fails = st.get("fails", 0)
+            avg_ms = st.get("avg_ms", 0)
+            ok_rate = round((calls - fails) * 100 / calls, 1) if calls else 100.0
+            # trạng thái vận hành (thay cho "tinh thần")
+            if inflight.get(key, 0) > 0:
+                status, status_cls = "🔄 ĐANG CHẠY", "busy"
+            elif calls and fails * 2 >= calls:
+                status, status_cls = "🔴 LỖI", "error"
+            elif st.get("updated_at"):
+                status, status_cls = "🟢 SẴN SÀNG", "ready"
+            else:
+                status, status_cls = "🟡 CHƯA KÍCH HOẠT", "stale"
+            agent_perf[key] = {"calls": calls, "fails": fails,
+                               "ok_rate": ok_rate, "avg_ms": avg_ms}
+            agent_rank[key] = rank
+            agent_status[key] = (status, status_cls)
+        avg_ok = (round(sum(p["ok_rate"] for p in agent_perf.values())
+                        / len(agent_perf), 1) if agent_perf else 100.0)
+        # ---------- buff phòng ban ----------
+        DEPT_BUFF = {
+            "Kế Toán & Tài Chính": "💰 Giảm 10% chi phí",
+            "Kỹ Thuật & Lưu Trữ": "🛡️ An toàn dữ liệu +",
+            "Hậu Kỳ & Sản Xuất": "⚡ Tốc độ xử lý +15%",
+            "App & Mobile": "🔧 Ít bug hơn",
+            "Social & Marketing": "⭐ Uy tín + mỗi ngày",
+            "Lịch & Điều Hành": "📅 Không trễ deadline",
+            "Phòng Dữ Liệu": "🔍 Tìm kiếm siêu nhanh",
+        }
+        # ---------- chờ sếp duyệt (task-bus pending) ----------
+        pending_approvals = []
+        try:
+            _tb = os.path.expanduser("~/workspace/task-bus/pending")
+            for fn in sorted(os.listdir(_tb)):
+                if fn.endswith(".json"):
+                    d = _json.load(open(os.path.join(_tb, fn)))
+                    pending_approvals.append({
+                        "file": fn,
+                        "task": d.get("task", "")[:120],
+                        "from": d.get("from", "?"),
+                    })
+        except Exception:
+            pass
+
+        def hero(key, char, name, color, persona, role):
+            t = tok.get(key, {})
+            d1 = t.get(1, {"tokens": 0, "calls": 0, "cost": 0})
+            rank = agent_rank.get(key, 1)
+            perf = agent_perf.get(key, {"calls": 0, "fails": 0,
+                                        "ok_rate": 100.0, "avg_ms": 0})
+            status, status_cls = agent_status.get(key, ("🟢 SẴN SÀNG", "ready"))
+            badge = f"<span class='ofc-badge ofc-{status_cls}'>{status}</span>"
+            cls = status_cls
+            spd = (f"{perf['avg_ms']/1000:.1f}s" if perf["avg_ms"] else "—")
+            return (
+                f"<a class='ofc-hero {cls}' href='/chat' title='Nhắn với {html.escape(name)}'>"
+                f"<div class='ofc-char'>{char}</div>"
+                f"<div class='ofc-table'></div>"
+                f"<div class='ofc-rank'>🎖️ {RANKS[rank]}</div>"
+                f"<div class='ofc-perm'>{RANK_PERM[rank]}</div>"
+                f"<div class='ofc-name' style='border-color:{color}'>"
+                f"<span class='ofc-dot' style='background:{color}'></span>{html.escape(name)}</div>"
+                f"<div class='ofc-persona'>“{persona}”</div>"
+                f"<div class='ofc-role'>{role}</div>{badge}"
+                f"<div class='ofc-perf'>✅ {perf['ok_rate']}% · "
+                f"⚡ {spd} · 🔢 {perf['calls']} task</div>"
+                f"<div class='ofc-promo' title='{RANK_PROMO[rank]}'>⬆️ {RANK_PROMO[rank]}</div>"
+                f"<div class='ofc-kb'>📚 Đã học: {kb_status['skills']} skills · "
+                f"{kb_status['rules']} quy tắc</div>"
+                f"<div class='ofc-tok'>🎟️ {fmt_num(d1['tokens'])} token · "
+                f"~${d1['cost']:.4f}</div></a>")
+
+        def metric(k, v):
+            return (f"<div class='ofc-m'><div class='ofc-mk'>{html.escape(k)}</div>"
+                    f"<div class='ofc-mv'>{html.escape(v)}</div></div>")
+
+        def soon():
+            return ("<div class='ofc-m'><div class='ofc-mk'>Dữ liệu</div>"
+                    "<div class='ofc-mv'>⏳ Sắp có</div></div>")
+
+        # ----- metrics Kế Toán & Tài Chính -----
+        m_ketoan = "".join(metric(k, fin[k]) for k in
+                           ("Doanh thu 2026", "Công nợ", "Doanh thu tháng này",
+                            "Doanh thu 7 ngày") if k in fin)
+        if overdue:
+            m_ketoan += metric("⚠️ Công nợ quá hạn", ", ".join(overdue[:3]))
+        if not m_ketoan:
+            m_ketoan = soon()
+
+        # ----- metrics Lịch & Điều Hành -----
+        done_m = _num(fin.get("Hoàn thành tháng này", ""))
+        rev_m = _num(fin.get("Doanh thu tháng này", ""))
+        m_lich = ""
+        if "Show" in fin:
+            m_lich += metric("Tổng show", fin["Show"])
+        if "Hoàn thành tháng này" in fin:
+            m_lich += metric("Xong tháng này", fin["Hoàn thành tháng này"])
+        if n_events is not None:
+            m_lich += metric("📅 Sự kiện 7 ngày tới", str(n_events))
+        if done_m and rev_m:
+            m_lich += metric("💰 TB/show tháng này", _vnd(rev_m // done_m))
+        if not m_lich:
+            m_lich = soon()
+
+        # ----- metrics Phòng Dữ Liệu -----
+        m_data = ""
+        if drive_n is not None:
+            m_data += metric("📁 File đã index",
+                             f"{drive_n:,}".replace(",", "."))
+            m_data += metric("🕐 Index lúc",
+                             str(drive_built)[:16] if drive_built else "chưa chạy")
+        sync = [("Finance", bool(fin)), ("Drive", bool(drive_n)), ("Orchestra", True)]
+        sync_parts = []
+        for n, ok in sync:
+            cls = "ok" if ok else "no"
+            mark = "✅" if ok else "❌"
+            sync_parts.append(f"<span class='ofc-sync {cls}'>{mark}{n}</span>")
+        m_data += (f"<div class='ofc-m ofc-m-wide'><div class='ofc-mk'>🔗 Đồng bộ nguồn</div>"
+                   f"<div class='ofc-mv'>{' '.join(sync_parts)}</div></div>")
+        m_data += metric("🛡️ Backup gần nhất", "⏳ Sắp có")
+
+        # ----- EC Shuffle: 4 bước + nhân vật riêng -----
+        EC_STEPS = [
+            ("B1", "🐢", "Rùa vận chuyển", "INSTA 360 (81GB)", "G:", "J:",
+             "done", 100, "81GB → J: xong"),
+            ("B2", "🐜", "Kiến thợ", "Work (70GB)", "G:", "H:\\Work-G-temp",
+             "run", -1, "đang sync…"),
+            ("B3", "🦥", "Lười biếng", "Vertex/Pic/Fonts/2023 (26GB)", "G:", "H:",
+             "wait", 0, "chờ B2 xong"),
+            ("B4", "🦣", "Voi khổng lồ", "EC Team (295GB)", "H:", "G:",
+             "wait", 0, "chờ B3 xong"),
+        ]
+
+        def ec_card(sid, char, cname, name, src, dst, st, pct, detail):
+            bmap = {"done": ("✅ XONG", "ofc-ec-done"),
+                    "run": ("🔄 ĐANG CHẠY", "ofc-ec-run"),
+                    "wait": ("⏳ CHỜ", "ofc-ec-wait")}
+            blabel, bcls = bmap[st]
+            if pct >= 0:
+                bar = (f"<div class='ofc-pbar'><div class='ofc-pfill {bcls}' "
+                       f"style='width:{pct}%'></div></div>"
+                       f"<div class='ofc-pmeta'>{pct}% · {html.escape(detail)}</div>")
+            else:
+                bar = (f"<div class='ofc-pbar'><div class='ofc-pfill ofc-ec-run "
+                       f"ofc-stripes'></div></div>"
+                       f"<div class='ofc-pmeta'>{html.escape(detail)}</div>")
+            busy = "busy" if st == "run" else ("idle" if st == "wait" else "done")
+            return (
+                f"<div class='ofc-ec-card {bcls}'>"
+                f"<div class='ofc-ec-char {busy}'>{char}</div>"
+                f"<div class='ofc-ec-id'>{sid} · {cname}</div>"
+                f"<div class='ofc-ec-name'>{html.escape(name)}</div>"
+                f"<div class='ofc-ec-route'>{html.escape(src)} → {html.escape(dst)}</div>"
+                f"{bar}"
+                f"<span class='ofc-badge {bcls}'>{blabel}</span></div>")
+
+        ec_html = "".join(ec_card(*s) for s in EC_STEPS)
+        disk_html = ""
+        for d in ("G", "H", "J"):
+            info = drives.get(d)
+            if info:
+                col = ("#ef4444" if info["pct"] >= 95
+                       else ("#f59e0b" if info["pct"] >= 85 else "#22c55e"))
+                disk_html += (
+                    f"<div class='ofc-m'><div class='ofc-mk'>💽 Ổ {d}: "
+                    f"trống {info['free']:.1f}/{info['total']:.0f} GB</div>"
+                    f"<div class='ofc-pbar'><div class='ofc-pfill' "
+                    f"style='width:{info['pct']}%;background:{col}'></div></div>"
+                    f"<div class='ofc-pmeta'>{info['pct']}% đã dùng</div></div>")
+            else:
+                disk_html += metric(f"💽 Ổ {d}", "⏳ đang cập nhật")
+
+        # ----- bảng token chi tiết -----
+        tok_rows = ""
+        for key, char, name, color, _, _ in AGENTS:
+            t = tok.get(key, {})
+            d1 = t.get(1, {"tokens": 0, "calls": 0, "cost": 0})
+            d7 = t.get(7, {"tokens": 0, "calls": 0, "cost": 0})
+            d30 = t.get(30, {"tokens": 0, "calls": 0, "cost": 0})
+            tok_rows += (
+                f"<tr><td><span class='ofc-dot' style='background:{color}'></span>"
+                f"{char} {html.escape(name)}</td>"
+                f"<td>{fmt_num(d1['tokens'])}</td>"
+                f"<td>{fmt_num(d7['tokens'])}</td>"
+                f"<td>{fmt_num(d30['tokens'])}</td>"
+                f"<td>~${d30['cost']:.4f}</td></tr>")
+        tok_table = (
+            "<table class='ofc-table'><tr><th>AI</th><th>Hôm nay</th>"
+            "<th>7 ngày</th><th>30 ngày</th><th>Chi phí 30d</th></tr>"
+            f"{tok_rows}</table>")
+
+        # ----- phòng ban (compact) -----
+        def desk(key, char, name, color, role, lead=False):
+            status, status_cls = agent_status.get(key, ("🟢 SẴN SÀNG", "ready"))
+            badge = f"<span class='ofc-badge ofc-{status_cls}'>{status}</span>"
+            cls = status_cls
+            lead_tag = ("<div class='ofc-lead-tag'>👔 TRƯỞNG PHÒNG</div>"
+                        if lead else "")
+            lead_cls = " ofc-lead" if lead else ""
+            return (
+                f"<a class='ofc-desk {cls}{lead_cls}' href='/chat'>"
+                f"{lead_tag}"
+                f"<div class='ofc-char sm'>{char}</div>"
+                f"<div class='ofc-name' style='border-color:{color}'>"
+                f"<span class='ofc-dot' style='background:{color}'></span>"
+                f"{html.escape(name)}</div>"
+                f"<div class='ofc-role'>{role}</div>{badge}</a>")
+
+        sections = []
+
+        def section(icon, name, live, metrics_html, desks):
+            tag = ("<span class='ofc-live-tag'>✅ Data thật</span>" if live
+                   else "<span class='ofc-soon-tag'>⏳ Sắp có data</span>")
+            buff = DEPT_BUFF.get(name, "")
+            n_staff = len(desks)
+            sections.append(
+                f"<div class='ofc-dept'>"
+                f"<div class='ofc-dept-head'><span class='ofc-dept-title'>{icon} {name}</span>{tag}</div>"
+                f"<div class='ofc-dept-sub'><span class='ofc-buff'>{buff}</span>"
+                f"<span class='ofc-mgr'>👥 {n_staff}/15 nhân viên</span></div>"
+                f"<div class='ofc-metrics'>{metrics_html}</div>"
+                f"<div class='ofc-desks'>{''.join(desks)}</div></div>")
+
+        section("🏦", "Kế Toán & Tài Chính", bool(fin), m_ketoan, [
+            desk("gemini", "🦊", "Gemini", C["gemini"], "📊 Phân tích chi tiêu", lead=True),
+            desk("deepseek", "🦈", "DeepSeek", C["deepseek"], "🔍 Soi công nợ"),
+            desk("claude", "🐯", "Claude", C["claude"], "📝 Lập báo cáo"),
+            desk("lmstudio", "🐸", "LM Studio", C["lmstudio"], "⚡ Trả lời nhanh")])
+        section("💾", "Kỹ Thuật & Lưu Trữ", False, soon(), [
+            desk("claude", "🖥️", "Claude", C["claude"], "💽 Giám sát ổ cứng", lead=True),
+            desk("lmstudio", "🗜️", "LM Studio", C["lmstudio"], "🗂️ Phân loại & dọn file")])
+        section("🎬", "Hậu Kỳ & Sản Xuất", False, soon(), [
+            desk("gemini", "🎞️", "Gemini", C["gemini"], "✂️ Dựng & cắt ghép", lead=True),
+            desk("claude", "🎨", "Claude", C["claude"], "🖌️ Retouch & màu sắc")])
+        section("📱", "App & Mobile", False, soon(), [
+            desk("muse", "📲", "Muse", C["muse"], "🔨 Build & test app", lead=True),
+            desk("deepseek", "🐞", "DeepSeek", C["deepseek"], "🔍 Soi bug & review code")])
+        section("📣", "Social & Marketing", False, soon(), [
+            desk("gemini", "📢", "Gemini", C["gemini"], "✍️ Viết bài social", lead=True),
+            desk("claude", "🖼️", "Claude", C["claude"], "🎨 Portfolio & Behance")])
+        section("📅", "Lịch & Điều Hành", bool(fin) or n_events is not None, m_lich, [
+            desk("muse", "🗓️", "Muse", C["muse"], "🎬 Điều phối show", lead=True),
+            desk("gemini", "⏰", "Gemini", C["gemini"], "📅 Theo dõi lịch"),
+            desk("deepseek", "👷", "DeepSeek", C["deepseek"], "💵 Crew & lương")])
+        section("🗄️", "Phòng Dữ Liệu", drive_n is not None, m_data, [
+            desk("claude", "🗂️", "Claude", C["claude"], "📁 Kho Drive: index & tìm kiếm", lead=True),
+            desk("muse", "🔄", "Muse", C["muse"], "🔗 Đồng bộ Finance↔Drive↔Orchestra"),
+            desk("deepseek", "📈", "DeepSeek", C["deepseek"], "📊 Phân tích & báo cáo"),
+            desk("lmstudio", "🛡️", "LM Studio", C["lmstudio"], "💾 Backup & an toàn")])
+
+        # ----- dải tổng quan -----
+        strip = "".join(metric(k, fin[k]) for k in list(fin)[:4] if k in fin)
+        if n_events is not None:
+            strip += metric("📅 Sự kiện 7 ngày", str(n_events))
+        strip += metric("🎟️ Token hôm nay",
+                        f"{fmt_num(total_tok)} token · ~${total_cost:.4f}")
+        # ----- chỉ số công ty -----
+        rep = rpg.get("company", {}).get("reputation", 82)
+        done_s = fin.get("Hoàn thành tháng này", "?")
+        company_html = (
+            f"<div class='ofc-sec-title'>🏢 Chỉ số công ty</div>"
+            f"<div class='ofc-strip' style='grid-template-columns:repeat(4,1fr)'>"
+            f"{metric('💰 Doanh thu tháng', fin.get('Doanh thu tháng này', '?'))}"
+            f"{metric('⭐ Uy tín', str(rep) + '/100')}"
+            f"{metric('✅ Tỷ lệ thành công TB', str(avg_ok) + '%')}"
+            f"{metric('📊 Dự án xong tháng này', str(done_s))}"
+            f"</div>")
+        if not strip:
+            strip = soon()
+
+        css = """
+        .ofc-live{color:#3ddc84;font-weight:600;}
+        .ofc-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;}
+        .ofc-hero-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;
+          margin-bottom:14px;padding:16px;border-radius:18px;
+          background:linear-gradient(180deg,rgba(74,168,255,.07),rgba(74,168,255,.02)),
+          repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(255,255,255,.025) 40px),
+          repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(255,255,255,.025) 40px);
+          border:1px solid var(--border);}
+        .ofc-hero{background:rgba(255,255,255,.03);border:1px solid var(--border);
+          border-radius:14px;padding:12px 6px;text-align:center;text-decoration:none;color:inherit;
+          display:block;transition:transform .2s;}
+        .ofc-hero:hover{transform:translateY(-4px);}
+        .ofc-char{font-size:58px;line-height:1.25;animation:ofc-float 3.2s ease-in-out infinite;
+          filter:drop-shadow(0 4px 8px rgba(0,0,0,.45));}
+        .ofc-char.sm{font-size:40px;}
+        .ofc-hero.busy .ofc-char,.ofc-desk.busy .ofc-char{animation:ofc-pulse 1.4s infinite;}
+        .ofc-hero:hover .ofc-char,.ofc-desk:hover .ofc-char{animation:ofc-bounce .6s;}
+        .ofc-table{height:10px;margin:2px 14px 0;border-radius:5px;
+          background:linear-gradient(180deg,#8b5e34,#6b4423);
+          box-shadow:0 2px 4px rgba(0,0,0,.4);}
+        .ofc-name{font-weight:700;margin-top:8px;padding:4px;border-bottom:3px solid;
+          border-radius:6px;font-size:14px;}
+        .ofc-persona{font-size:11px;color:var(--muted);font-style:italic;margin-top:4px;}
+        .ofc-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;}
+        .ofc-role{font-size:12px;color:var(--muted);margin:6px 0;}
+        .ofc-badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;}
+        .ofc-busy{background:#123f2b;color:#3ddc84;}
+        .ofc-ready{background:#123f2b;color:#3ddc84;}
+        .ofc-error{background:#4a1515;color:#ff6b6b;}
+        .ofc-stale{background:#3a3f47;color:#9aa0a6;}
+        .ofc-hero.ready .ofc-char{animation:ofc-float 3.2s ease-in-out infinite;}
+        .ofc-hero.busy .ofc-char{animation:ofc-pulse 1.4s infinite;}
+        .ofc-hero.error .ofc-char{animation:ofc-shake .5s infinite;}
+        .ofc-rank{font-size:11px;font-weight:800;color:#ffd43b;margin-top:6px;}
+        .ofc-perm{font-size:10px;color:var(--muted);font-style:italic;}
+        .ofc-perf{font-size:11px;color:var(--muted);margin-top:6px;}
+        .ofc-promo{font-size:10px;color:#8ab4f8;margin-top:4px;cursor:help;}
+        .ofc-idle{background:#3a3f47;color:#9aa0a6;}
+        .ofc-tok{font-size:11px;color:var(--muted);margin-top:6px;}
+        .ofc-dept{background:var(--card);border:1px solid var(--border);border-radius:16px;
+          padding:12px;margin-bottom:12px;}
+        .ofc-dept-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+        .ofc-dept-title{font-size:16px;font-weight:700;}
+        .ofc-live-tag{font-size:11px;font-weight:700;color:#3ddc84;background:#123f2b;
+          padding:3px 10px;border-radius:20px;white-space:nowrap;}
+        .ofc-soon-tag{font-size:11px;font-weight:700;color:#9aa0a6;background:#3a3f47;
+          padding:3px 10px;border-radius:20px;white-space:nowrap;}
+        .ofc-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;}
+        .ofc-m{background:rgba(255,255,255,.03);border:1px solid var(--border);
+          border-radius:10px;padding:6px 10px;}
+        .ofc-m-wide{grid-column:span 2;}
+        .ofc-mk{font-size:11px;color:var(--muted);}
+        .ofc-mv{font-size:14px;font-weight:700;}
+        .ofc-desks{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
+        .ofc-desk{background:rgba(255,255,255,.03);border:1px solid var(--border);
+          border-radius:12px;padding:10px 6px;text-align:center;text-decoration:none;color:inherit;
+          display:block;transition:transform .2s;}
+        .ofc-desk:hover{transform:translateY(-3px);}
+        .ofc-sync{font-size:12px;font-weight:700;margin-right:8px;white-space:nowrap;}
+        .ofc-sync.ok{color:#3ddc84;}
+        .ofc-lead-tag{font-size:10px;font-weight:800;color:#1a1a2e;background:#ffd43b;
+          padding:2px 8px;border-radius:12px;margin-bottom:4px;display:inline-block;}
+        .ofc-desk.ofc-lead{border:2px solid #ffd43b;}
+        .ofc-org{background:var(--card);border:1px solid var(--border);border-radius:16px;
+          padding:16px;margin-bottom:12px;text-align:center;}
+        .ofc-org-top{display:inline-block;padding:8px 20px;}
+        .ofc-org-char{font-size:40px;}
+        .ofc-org-char.big{font-size:52px;animation:ofc-float 3s ease-in-out infinite;}
+        .ofc-org-name{font-weight:800;font-size:14px;border-bottom:3px solid #4aa8ff;
+          display:inline-block;padding:2px 10px;border-radius:6px;}
+        .ofc-org-dept{font-size:11px;color:var(--muted);margin-top:2px;}
+        .ofc-org-arrow{font-size:20px;margin:2px 0;color:var(--muted);}
+        .ofc-org-row{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:6px;}
+        .ofc-org-node{background:rgba(255,255,255,.03);border:1px solid var(--border);
+          border-radius:10px;padding:8px 10px;min-width:86px;}
+        .ofc-org-node .ofc-org-char{font-size:30px;}
+        .ofc-flow{background:#123f2b;border:1px solid #3ddc84;color:#d3f9d8;
+          border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:13px;}
+        .ofc-flow-idle{background:rgba(255,255,255,.03);border-color:var(--border);color:var(--muted);}
+        .ofc-flow a{color:#4aa8ff;font-weight:700;}
+        .ofc-sticky{position:sticky;top:0;z-index:900;background:rgba(13,17,23,.95);
+          backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:12px;
+          padding:8px 14px;margin-bottom:12px;display:flex;align-items:center;
+          gap:8px;flex-wrap:wrap;font-size:12px;}
+        .ofc-stk-label{font-weight:800;color:var(--muted);}
+        .ofc-stk-sep{color:var(--border);}
+        .ofc-stk-item{font-weight:700;padding:3px 10px;border-radius:16px;
+          background:#3a3f47;color:#9aa0a6;white-space:nowrap;}
+        .ofc-stk-item.done{background:#123f2b;color:#3ddc84;}
+        .ofc-stk-item.run{background:#4a3208;color:#fbbf24;animation:ofc-pulse 1.6s infinite;}
+        .ofc-stk-item.idle{background:#3a3f47;color:#9aa0a6;}
+        .ofc-kb{font-size:10px;color:#8ab4f8;margin-top:4px;}
+        .ofc-kb-link{font-size:13px;margin-top:4px;}
+        .ofc-kb-link a{color:#4aa8ff;}
+        .ofc-reload{background:#1a3a5c;border:1px solid #4aa8ff;color:#8ab4f8;
+          border-radius:16px;padding:2px 10px;font-size:11px;font-weight:700;cursor:pointer;}
+        .ofc-reload:hover{background:#4aa8ff;color:#fff;}
+        /* bong bóng chat nổi */
+        .ofc-bubble{position:fixed;right:18px;bottom:18px;width:60px;height:60px;
+          border-radius:50%;background:linear-gradient(135deg,#4aa8ff,#b07bff);
+          font-size:30px;display:flex;align-items:center;justify-content:center;
+          cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.5);z-index:999;
+          border:none;transition:transform .2s;}
+        .ofc-bubble:hover{transform:scale(1.1);}
+        .ofc-bubble .ofc-unread{position:absolute;top:-4px;right:-4px;background:#ff6b6b;
+          color:#fff;font-size:11px;font-weight:800;min-width:20px;height:20px;
+          border-radius:10px;display:none;align-items:center;justify-content:center;}
+        .ofc-panel{position:fixed;right:18px;bottom:90px;width:360px;max-width:calc(100vw - 36px);
+          height:480px;max-height:calc(100vh - 120px);background:var(--card);
+          border:1px solid var(--border);border-radius:16px;z-index:999;
+          display:none;flex-direction:column;overflow:hidden;
+          box-shadow:0 8px 32px rgba(0,0,0,.6);}
+        .ofc-panel.open{display:flex;}
+        .ofc-panel-head{padding:10px 12px;border-bottom:1px solid var(--border);
+          display:flex;align-items:center;gap:8px;}
+        .ofc-panel-head select{flex:1;background:var(--bg3);color:inherit;
+          border:1px solid var(--border);border-radius:8px;padding:6px;font-size:13px;}
+        .ofc-panel-head button{background:none;border:none;color:var(--muted);
+          font-size:18px;cursor:pointer;}
+        .ofc-panel-msgs{flex:1;overflow-y:auto;padding:10px;display:flex;
+          flex-direction:column;gap:8px;}
+        .ofc-panel-input{display:flex;gap:6px;padding:10px;border-top:1px solid var(--border);}
+        .ofc-panel-input input{flex:1;background:var(--bg3);border:1px solid var(--border);
+          border-radius:20px;padding:8px 14px;color:inherit;font-size:13px;}
+        .ofc-panel-input button{background:#4aa8ff;border:none;color:#fff;
+          border-radius:20px;padding:8px 16px;cursor:pointer;font-weight:700;}
+        .ofc-msg{max-width:85%;padding:7px 11px;border-radius:14px;font-size:13px;line-height:1.45;}
+        .ofc-msg.user{align-self:flex-end;background:#4aa8ff;color:#fff;
+          border-bottom-right-radius:4px;}
+        .ofc-msg.ai{align-self:flex-start;background:#161b22;
+          border:1px solid var(--border);border-bottom-left-radius:4px;}
+        .ofc-msg .ofc-who{display:flex;align-items:center;gap:4px;font-size:11px;
+          font-weight:700;margin-bottom:3px;}
+        .ofc-msg .ofc-time{font-size:10px;color:var(--muted);margin-top:3px;text-align:right;}
+        .ofc-ec-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px;}
+        .ofc-ec-card{background:rgba(255,255,255,.03);border:1px solid var(--border);
+          border-radius:12px;padding:12px 8px;text-align:center;border-top:4px solid #475569;}
+        .ofc-ec-card.ofc-ec-done{border-top-color:#22c55e;}
+        .ofc-ec-card.ofc-ec-run{border-top-color:#f59e0b;box-shadow:0 0 14px rgba(245,158,11,.25);}
+        .ofc-ec-char{font-size:46px;animation:ofc-float 3s ease-in-out infinite;}
+        .ofc-ec-char.busy{animation:ofc-pulse 1.4s infinite;}
+        .ofc-ec-id{font-weight:700;font-size:13px;margin-top:4px;}
+        .ofc-ec-name{font-size:12px;color:var(--muted);}
+        .ofc-ec-route{font-size:11px;color:var(--muted);margin:4px 0;}
+        .ofc-pbar{height:8px;background:rgba(255,255,255,.08);border-radius:4px;
+          overflow:hidden;margin:6px 4px;}
+        .ofc-pfill{height:100%;border-radius:4px;transition:width .5s;}
+        .ofc-ec-done{background:#22c55e;}
+        .ofc-ec-run{background:#f59e0b;}
+        .ofc-ec-wait{background:#475569;}
+        .ofc-stripes{background:repeating-linear-gradient(45deg,#f59e0b,#f59e0b 8px,#d97706 8px,#d97706 16px);
+          width:100%!important;animation:ofc-slide 1.2s linear infinite;}
+        .ofc-pmeta{font-size:11px;color:var(--muted);}
+        .ofc-table{width:100%;border-collapse:collapse;margin:4px 0 12px;font-size:13px;}
+        .ofc-table th,.ofc-table td{padding:8px 10px;text-align:left;
+          border-bottom:1px solid var(--border);}
+        .ofc-table th{color:var(--muted);font-size:11px;text-transform:uppercase;}
+        .ofc-sec-title{font-size:16px;font-weight:700;margin:14px 0 8px;}
+        .ofc-chat-link{display:inline-block;margin-left:10px;font-size:13px;font-weight:600;
+          color:#4aa8ff;text-decoration:none;border:1px solid #4aa8ff;border-radius:20px;
+          padding:4px 14px;}
+        @keyframes ofc-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+        @keyframes ofc-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(1.08)}}
+        @keyframes ofc-bounce{0%,100%{transform:translateY(0)}30%{transform:translateY(-14px)}60%{transform:translateY(0)}80%{transform:translateY(-6px)}}
+        @keyframes ofc-shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+        @keyframes ofc-slide{to{background-position:22px 0}}
+        @media(max-width:700px){.ofc-hero-row{grid-template-columns:repeat(2,1fr);}
+          .ofc-desks{grid-template-columns:repeat(2,1fr);}
+          .ofc-metrics,.ofc-strip{grid-template-columns:repeat(2,1fr);}.ofc-m-wide{grid-column:span 2;}
+          .ofc-ec-row{grid-template-columns:repeat(2,1fr);}}
+        """
+        heroes = "".join(hero(*a) for a in AGENTS)
+        # ----- bong bóng chat nổi (Messenger-style) -----
+        bubble_html = """
+        <button class="ofc-bubble" id="ofc-bubble" title="Chat với AI">💬
+          <span class="ofc-unread" id="ofc-unread">0</span></button>
+        <div class="ofc-panel" id="ofc-panel">
+          <div class="ofc-panel-head">
+            <select id="ofc-agent">
+              <option value="auto">🤖 Tự động</option>
+              <option value="gemini">🔵 Gemini</option>
+              <option value="muse">🟣 Muse</option>
+              <option value="lmstudio">🟢 LM Studio</option>
+              <option value="deepseek">🔷 DeepSeek</option>
+              <option value="claude">🟠 Claude</option>
+            </select>
+            <button id="ofc-min" title="Thu gọn">—</button>
+          </div>
+          <div class="ofc-panel-msgs" id="ofc-msgs"></div>
+          <div class="ofc-panel-input">
+            <input id="ofc-text" placeholder="Nhắn tin..." autocomplete="off">
+            <button id="ofc-send">Gửi</button>
+          </div>
+        </div>"""
+        bubble_js = """
+<script>
+(function(){
+var AMETA={gemini:{label:'Gemini',icon:'🔵'},muse:{label:'Muse',icon:'🟣'},
+lmstudio:{label:'LM Studio',icon:'🟢'},deepseek:{label:'DeepSeek',icon:'🔷'},
+claude:{label:'Claude',icon:'🟠'}};
+var panel=document.getElementById('ofc-panel'),bubble=document.getElementById('ofc-bubble'),
+box=document.getElementById('ofc-msgs'),inp=document.getElementById('ofc-text'),
+unread=document.getElementById('ofc-unread'),lastId=null,open=false,unreadN=0;
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function renderMsg(m){
+  var div=document.createElement('div');
+  if(m.role==='user'){div.className='ofc-msg user';}
+  else{div.className='ofc-msg ai';
+    var meta=AMETA[m.agent]||{label:m.agent||'AI',icon:'🤖'};
+    div.innerHTML='<div class="ofc-who"><span>'+meta.icon+'</span>'+esc(meta.label)+'</div>';}
+  var c=document.createElement('div');c.innerHTML=esc(m.content).replace(/\\n/g,'<br>');
+  div.appendChild(c);
+  var t=document.createElement('div');t.className='ofc-time';
+  t.textContent=(m.created_at||'').slice(11,16);div.appendChild(t);
+  div.dataset.id=m.id;return div;
+}
+async function loadH(){
+  try{var r=await fetch('/api/chat/history');var d=await r.json();
+    box.innerHTML='';(d.messages||[]).forEach(function(m){box.appendChild(renderMsg(m));lastId=m.id;});
+    box.scrollTop=box.scrollHeight;}catch(e){}
+}
+async function send(){
+  var text=inp.value.trim();if(!text)return;
+  var agent=document.getElementById('ofc-agent').value;inp.value='';
+  box.appendChild(renderMsg({id:'tmp'+Date.now(),role:'user',content:text,created_at:new Date().toISOString()}));
+  box.scrollTop=box.scrollHeight;
+  try{var r=await fetch('/api/chat/send',{method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:'msg='+encodeURIComponent(text)+'&agent='+encodeURIComponent(agent)+'&csrf='+encodeURIComponent(OFC_CSRF)});
+    var d=await r.json();
+    if(d.message){box.appendChild(renderMsg(d.message));lastId=d.message.id;box.scrollTop=box.scrollHeight;}
+    else if(d.error){box.appendChild(renderMsg({id:'e',role:'ai',agent:'muse',content:'⚠️ '+d.error,created_at:''}));}
+  }catch(e){}
+}
+function toggle(force){
+  open=(typeof force==='boolean')?force:!open;
+  panel.classList.toggle('open',open);
+  if(open){unreadN=0;unread.style.display='none';loadH();box.scrollTop=box.scrollHeight;}
+}
+bubble.onclick=function(){toggle();};
+document.getElementById('ofc-min').onclick=function(){toggle(false);};
+document.getElementById('ofc-send').onclick=send;
+inp.addEventListener('keydown',function(e){if(e.key==='Enter')send();});
+setInterval(async function(){
+  if(open||!lastId&&false)return;
+  try{var r=await fetch('/api/chat/history');var d=await r.json();
+    var msgs=d.messages||[];if(!msgs.length)return;
+    var last=msgs[msgs.length-1];
+    if(last.id!==lastId){
+      if(open){var seen={};Array.prototype.forEach.call(box.children,function(c){seen[c.dataset.id]=1;});
+        msgs.forEach(function(m){if(!seen[m.id])box.appendChild(renderMsg(m));});
+        lastId=last.id;box.scrollTop=box.scrollHeight;}
+      else if(last.role!=='user'){unreadN++;unread.textContent=unreadN>9?'9+':unreadN;unread.style.display='flex';lastId=last.id;}
+      else{lastId=last.id;}
+    }}catch(e){}
+},5000);
+loadH();
+})();
+</script>"""
+        # ----- sơ đồ tổ chức -----
+        org_leads = [
+            ("🦊", "Gemini", C["gemini"], "Kế Toán"),
+            ("🐯", "Claude", C["claude"], "Kỹ Thuật"),
+            ("🦊", "Gemini", C["gemini"], "Hậu Kỳ"),
+            ("🦉", "Muse", C["muse"], "App"),
+            ("🦊", "Gemini", C["gemini"], "Social"),
+            ("🦉", "Muse", C["muse"], "Lịch"),
+            ("🐯", "Claude", C["claude"], "Dữ Liệu"),
+        ]
+        org_html = "".join(
+            f"<div class='ofc-org-node'><div class='ofc-org-char'>{ch}</div>"
+            f"<div class='ofc-org-name' style='border-color:{col}'>{nm}</div>"
+            f"<div class='ofc-org-dept'>{dp}</div></div>"
+            for ch, nm, col, dp in org_leads)
+        # ----- luồng công việc đang chạy -----
+        busy_agents = [a for a in AGENTS if inflight.get(a[0], 0) > 0]
+        if busy_agents:
+            flow_items = " → ".join(
+                f"{a[1]} {a[2]}" for a in busy_agents)
+            flow_html = (
+                f"<div class='ofc-flow'>🔄 <b>Luồng đang chạy:</b> "
+                f"👑 Anh → 🦉 Muse (Giám đốc) → {flow_items} đang xử lý</div>")
+        else:
+            flow_html = ("<div class='ofc-flow ofc-flow-idle'>💤 Chưa có việc đang chạy — "
+                         "giao việc ở <a href='/new'>➕ Giao việc</a> hoặc nhắn "
+                         "<a href='/chat'>💬 Chat AI</a></div>")
+        # ----- dải tiến trình sticky (luôn hiển thị) -----
+        # EC shuffle mini: B1 xong, B2 chạy, B3/B4 chờ
+        ec_mini = (
+            "<span class='ofc-stk-item done'>✅ B1</span>"
+            "<span class='ofc-stk-item run'>🔄 B2</span>"
+            "<span class='ofc-stk-item'>⏳ B3</span>"
+            "<span class='ofc-stk-item'>⏳ B4</span>")
+        busy_mini = "".join(
+            f"<span class='ofc-stk-item run'>{a[1]} {a[2]}</span>"
+            for a in AGENTS if inflight.get(a[0], 0) > 0)
+        if not busy_mini:
+            busy_mini = "<span class='ofc-stk-item idle'>💤 Tất cả rảnh</span>"
+        sticky_html = (
+            f"<div class='ofc-sticky'>"
+            f"<span class='ofc-stk-label'>🔀 EC:</span>{ec_mini}"
+            f"<span class='ofc-stk-sep'>|</span>"
+            f"<span class='ofc-stk-label'>👥 Agent:</span>{busy_mini}"
+            f"</div>")
+        # ----- khu kho kiến thức chung -----
+        kb_html = (
+            f"<div class='ofc-dept'><div class='ofc-dept-head'>"
+            f"<span class='ofc-dept-title'>📚 Kho Kiến Thức Chung</span>"
+            f"<span class='ofc-live-tag'>✅ Agent đã học chung</span></div>"
+            f"<div class='ofc-metrics'>"
+            f"{metric('🧠 Skills', str(kb_status['skills']))}"
+            f"{metric('📜 Quy tắc studio', str(kb_status['rules']))}"
+            f"{metric('💰 Finance', '✅ đã nối' if fin else '❌ chưa nối')}"
+            f"<div class='ofc-m'><div class='ofc-mk'>🕐 Học lúc</div>"
+            f"<div class='ofc-mv'>{html.escape(kb_status['loaded_at'])} "
+            f"<button class='ofc-reload' id='ofc-kb-reload' "
+            f"title='Cho học lại ngay'>🔄 Học lại</button></div></div>"
+            f"</div>"
+            f"<div class='ofc-kb-link'>📂 <a href='{kb_link}' target='_blank'>"
+            f"Mở folder Kho Kiến Thức AI trên Drive</a></div>"
+            f"</div>")
+        # ----- chờ sếp duyệt -----
+        if pending_approvals:
+            appr_items = "".join(
+                f"<div class='ofc-appr-item'><div class='ofc-appr-task'>"
+                f"📋 {html.escape(a['task'])}</div>"
+                f"<div class='ofc-appr-meta'>từ {html.escape(a['from'])} · "
+                f"<button class='ofc-approve' data-f='{html.escape(a['file'])}'>"
+                f"✅ Duyệt</button></div></div>"
+                for a in pending_approvals[:5])
+            appr_html = (
+                f"<div class='ofc-sec-title'>✍️ Chờ sếp duyệt "
+                f"({len(pending_approvals)})</div>"
+                f"<div class='ofc-appr'>{appr_items}</div>")
+        else:
+            appr_html = ""
+        body = (f"<style>{css}</style>"
+                f"{sticky_html}"
+                f"<h1>🏢 Văn Phòng AI <span class='ofc-live'>● LIVE</span>"
+                f"<a class='ofc-chat-link' href='/chat'>💬 Vào Chat AI</a></h1>"
+                f"<p class='muted'>5 nhân vật AI thật của Orchestra · mỗi người 1 tính cách + nhiệm vụ · "
+                f"bấm vào nhân vật để nhắn tin · tự refresh 30s</p>"
+                f"<div class='ofc-strip'>{strip}</div>"
+                f"{company_html}"
+                f"{appr_html}"
+                f"<div class='ofc-hero-row'>{heroes}</div>"
+                f"<div class='ofc-sec-title'>🏛️ Sơ đồ tổ chức</div>"
+                f"<div class='ofc-org'>"
+                f"<div class='ofc-org-top'><div class='ofc-org-char big'>👑</div>"
+                f"<div class='ofc-org-name'>Anh Thống</div>"
+                f"<div class='ofc-org-dept'>Chủ tịch — giao việc</div></div>"
+                f"<div class='ofc-org-arrow'>⬇</div>"
+                f"<div class='ofc-org-top'><div class='ofc-org-char big'>🦉</div>"
+                f"<div class='ofc-org-name' style='border-color:{C['muse']}'>Muse</div>"
+                f"<div class='ofc-org-dept'>GIÁM ĐỐC — điều phối chung</div></div>"
+                f"<div class='ofc-org-arrow'>⬇ chia về 7 phòng ban</div>"
+                f"<div class='ofc-org-row'>{org_html}</div>"
+                f"</div>"
+                f"{flow_html}"
+                f"<div class='ofc-sec-title'>🔀 EC Shuffle — xáo folder gom chỗ cho EC Team</div>"
+                f"<div class='ofc-ec-row'>{ec_html}</div>"
+                f"<div class='ofc-metrics' style='grid-template-columns:repeat(3,1fr)'>{disk_html}</div>"
+                f"<div class='ofc-sec-title'>🎟️ Token chi tiết theo AI</div>"
+                f"{tok_table}"
+                f"{kb_html}"
+                f"{''.join(sections)}"
+                f"{bubble_html}"
+                f"<script>setTimeout(()=>location.reload(),30000)</script>"
+                f"<script>const OFC_CSRF={csrf!r};</script>"
+                f"<script>"
+                f"document.getElementById('ofc-kb-reload').onclick=async function(){{"
+                f"this.textContent='⏳ Đang học...';"
+                f"try{{var r=await fetch('/api/kb/reload');var d=await r.json();"
+                f"if(d.ok){{this.textContent='✅ Đã học '+d.skills+' skills';location.reload();}}"
+                f"else{{this.textContent='❌ Lỗi';}}}}catch(e){{this.textContent='❌ Lỗi';}}"
+                f"}};"
+                f"document.querySelectorAll('.ofc-approve').forEach(function(btn){{"
+                f"btn.onclick=async function(){{"
+                f"btn.textContent='⏳...';"
+                f"try{{var r=await fetch('/api/kb/approve?f='+encodeURIComponent(btn.dataset.f));"
+                f"var d=await r.json();"
+                f"if(d.ok){{btn.textContent='✅ Đã duyệt';btn.disabled=true;location.reload();}}"
+                f"else{{btn.textContent='❌ Lỗi';}}}}catch(e){{btn.textContent='❌ Lỗi';}}"
+                f"}};}});</script>"
+                f"{bubble_js}")
+        self._send(page("Văn Phòng AI", body, active="/ai-office", user=user))
 
     def _skills_page(self, user, q, name):
         if name:
