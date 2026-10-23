@@ -7,13 +7,15 @@ Chạy: python3 web/app.py  ->  http://localhost:8099
 import html
 import json
 import os
+import secrets
 import sys
-from http.server import BaseHTTPRequestHandler, HTTPServer
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from orchestrator import Orchestrator, SubTask
-from auth.auth import verify, make_session, check_session, destroy_session, create_user
+from auth.auth import verify, make_session, check_session, destroy_session, create_user, get_csrf
 
 try:
     from tokens.tracker import get_tracker
@@ -30,6 +32,39 @@ except Exception:
 
 orch = Orchestrator()
 PORT = int(os.environ.get("PORT") or os.environ.get("WEB_PORT", "8099"))
+
+# ============ Bảo mật: throttle login ============
+# Sau 5 lần đăng nhập sai trong 15 phút -> khóa IP 15 phút
+_LOGIN_ATTEMPTS = {}  # ip -> {"fails": int, "first": ts, "locked_until": ts}
+_LOGIN_WINDOW = 900   # 15 phút
+_LOGIN_MAX_FAILS = 5
+
+
+def _login_allowed(ip: str) -> bool:
+    now = time.time()
+    rec = _LOGIN_ATTEMPTS.get(ip)
+    if not rec:
+        return True
+    if rec.get("locked_until", 0) > now:
+        return False
+    if now - rec.get("first", now) > _LOGIN_WINDOW:
+        _LOGIN_ATTEMPTS.pop(ip, None)  # hết cửa sổ -> reset
+    return True
+
+
+def _login_failed(ip: str):
+    now = time.time()
+    rec = _LOGIN_ATTEMPTS.get(ip)
+    if not rec or now - rec.get("first", now) > _LOGIN_WINDOW:
+        rec = {"fails": 0, "first": now, "locked_until": 0}
+    rec["fails"] += 1
+    if rec["fails"] >= _LOGIN_MAX_FAILS:
+        rec["locked_until"] = now + _LOGIN_WINDOW
+    _LOGIN_ATTEMPTS[ip] = rec
+
+
+def _login_ok(ip: str):
+    _LOGIN_ATTEMPTS.pop(ip, None)
 
 # ================= CSS: mobile-first, dark mode =================
 CSS = """
@@ -172,7 +207,7 @@ NAV_ITEMS = [
     ("/chat", "💬", "Chat AI"),
     ("/new", "➕", "Giao việc"),
     ("/history", "📜", "Lịch sử"),
-    ("/tokens", "🎟️", "Token"),
+    ("/tokens", "🎟️", "Token Usage"),
     ("/skills", "🧠", "Skills"),
     ("/settings", "⚙️", "Cài đặt"),
 ]
@@ -228,6 +263,17 @@ class H(BaseHTTPRequestHandler):
         tok = self._cookie_token()
         return check_session(tok) if tok else None
 
+    def _csrf_token(self):
+        """CSRF token của session hiện tại (None nếu chưa đăng nhập)."""
+        tok = self._cookie_token()
+        return get_csrf(tok) if tok else None
+
+    def _csrf_ok(self, q):
+        """Kiểm tra CSRF token gửi kèm POST có khớp session không."""
+        want = self._csrf_token()
+        got = q.get("csrf", [""])[0]
+        return bool(want) and bool(got) and secrets.compare_digest(got, want)
+
     # ============ GET ============
     def do_GET(self):
         u = urlparse(self.path)
@@ -260,7 +306,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/history":
             self._history(user); return
         if p == "/tokens":
-            self._tokens_page(user); return
+            self._tokens_page(user, q); return
         if p == "/skills":
             self._skills_page(user, q.get("q", [""])[0], q.get("name", [""])[0]); return
         if p == "/settings":
@@ -319,7 +365,9 @@ class H(BaseHTTPRequestHandler):
             from orchestrator.chat import get_history
             data = {"messages": get_history(50)}
         except Exception as e:
-            data = {"error": str(e), "messages": []}
+            import traceback
+            traceback.print_exc()  # log chi tiết ở server
+            data = {"error": "Lỗi máy chủ, thử lại sau", "messages": []}
         body = _json.dumps(data, ensure_ascii=False).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -355,7 +403,9 @@ class H(BaseHTTPRequestHandler):
                 body = _json.dumps({"ok": True, "message": saved},
                                    ensure_ascii=False).encode("utf-8")
             except Exception as e:
-                body = _json.dumps({"error": str(e)}).encode()
+                import traceback
+                traceback.print_exc()  # log chi tiết ở server
+                body = _json.dumps({"error": "Lỗi máy chủ, thử lại sau"}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
@@ -363,7 +413,8 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _chat_page(self, user):
-        self._send(page("Chat AI", """
+        csrf = self._csrf_token() or ""
+        _body = """
 <h1>💬 Chat AI</h1>
 <p class="muted">Nhắn như Messenger — mỗi AI có màu + avatar riêng, thấy rõ ai đang trả lời.</p>
 
@@ -483,7 +534,7 @@ async function send(){
     const r = await fetch('/api/chat/send', {
       method:'POST',
       headers:{'Content-Type':'application/x-www-form-urlencoded'},
-      body:'msg='+encodeURIComponent(text)+'&agent='+encodeURIComponent(agent),
+      body:'msg='+encodeURIComponent(text)+'&agent='+encodeURIComponent(agent)+'&csrf='+encodeURIComponent(CSRF),
     });
     const d = await r.json();
     typing.style.display = 'none';
@@ -518,7 +569,10 @@ setInterval(async ()=>{
   }catch(e){}
 }, 3000);
 </script>
-""", active="/chat", user=user))
+"""
+        _body = _body.replace("<script>",
+                              "<script>\nconst CSRF=" + json.dumps(csrf) + ";", 1)
+        self._send(page("Chat AI", _body, active="/chat", user=user))
 
     def _dashboard(self, user):
         tasks = orch.list_tasks(10)
@@ -526,7 +580,7 @@ setInterval(async ()=>{
         for t in tasks:
             cards += (f"<div class='card'><h3><a href='/task?id={t['id']}' "
                       f"style='color:var(--text)'>{html.escape(t['title'][:60])}</a></h3>"
-                      f"<span class='badge {t['status']}'>{t['status']}</span> "
+                      f"<span class='badge {html.escape(t['status'])}'>{html.escape(t['status'])}</span> "
                       f"<span class='muted' style='font-size:.8rem'>{t['created_at']}</span></div>")
         if not cards:
             cards = "<div class='card'><p class='muted'>Chưa có task nào. <a href='/new' style='color:var(--accent)'>Giao việc mới →</a></p></div>"
@@ -688,9 +742,11 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
             active="/", user=user))
 
     def _new_form(self, user):
+        csrf = self._csrf_token() or ""
         self._send(page("Giao việc mới",
-            """<h1>➕ Giao việc mới</h1>
+            f"""<h1>➕ Giao việc mới</h1>
             <div class="card"><form method="post" action="/run">
+            <input type="hidden" name="csrf" value="{csrf}">
             <label>Tiêu đề task</label>
             <input type="text" name="title" placeholder="VD: Tóm tắt báo cáo tuần" required>
             <label>Mô tả chi tiết (mỗi dòng 1 subtask: kind | nội dung)</label>
@@ -733,7 +789,7 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
         self._send(page(t["title"][:30],
             f"<p><a href='/' style='color:var(--accent)'>← Tổng quan</a></p>"
             f"<h1>{html.escape(t['title'])}</h1>"
-            f"<p><span class='badge {t['status']}'>{t['status']}</span> "
+            f"<p><span class='badge {html.escape(t['status'])}'>{html.escape(t['status'])}</span> "
             f"<span class='muted'>{t['created_at']}</span></p>"
             f"<div class='progress'><i style='width:{pct}%'></i></div>"
             f"<p class='muted'>{done}/{total} subtask xong</p>"
@@ -745,7 +801,7 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
         rows = "".join(
             f"<tr><td><a href='/task?id={t['id']}' style='color:var(--accent)'>{t['id']}</a></td>"
             f"<td>{html.escape(t['title'][:45])}</td>"
-            f"<td><span class='badge {t['status']}'>{t['status']}</span></td>"
+            f"<td><span class='badge {html.escape(t['status'])}'>{html.escape(t['status'])}</span></td>"
             f"<td class='muted'>{t['created_at'][:16]}</td></tr>"
             for t in tasks)
         self._send(page("Lịch sử",
@@ -753,44 +809,190 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
             f"<table class='tbl'><tr><th>ID</th><th>Tiêu đề</th><th>TT</th><th>Tạo lúc</th></tr>{rows}</table></div>",
             active="/history", user=user))
 
-    def _tokens_page(self, user):
+    def _tokens_page(self, user, q):
+        # --- Token Usage Dashboard: chỉ đọc dữ liệu, không sửa logic nào ---
+        AGENT_META = [
+            ("gemini", "🔵", "Gemini", "#4285F4"),
+            ("muse", "🟣", "Muse", "#A855F7"),
+            ("lmstudio", "🟢", "LM Studio", "#22C55E"),
+            ("deepseek", "🔷", "DeepSeek", "#0EA5E9"),
+            ("claude", "🟠", "Claude", "#F97316"),
+        ]
+        aemoji = {a: e for a, e, _, _ in AGENT_META}
+        aname = {a: n for a, _, n, _ in AGENT_META}
+        acolor = {a: c for a, _, _, c in AGENT_META}
+
+        days = q.get("days", ["30"])[0]
+        days = int(days) if days in ("7", "14", "30") else 30
+        agent_f = q.get("agent", ["all"])[0]
+        if agent_f not in [a for a, _, _, _ in AGENT_META]:
+            agent_f = "all"
+
         if not _tracker:
-            self._send(page("Token", "<h1>🎟️ Token</h1><p class='muted'>Chưa có dữ liệu.</p>",
-                            active="/tokens", user=user))
+            self._send(page("Token Usage",
+                "<h1>🎟️ Token Usage</h1><p class='muted'>Chưa có dữ liệu.</p>",
+                active="/tokens", user=user))
             return
-        by_agent = _tracker.summary_by_agent(30)
-        daily = _tracker.daily(14)
-        by_task = _tracker.summary_by_task(10)
-        tot = _tracker.total()
 
-        max_tok = max([r["tin"] or 0 for r in by_agent] + [1])
-        agent_bars = "".join(
-            f"<div class='tbar'><span class='lbl'>{html.escape(r['agent'])}</span>"
-            f"<span class='track'><span class='fill' style='width:{int((r['tin'] or 0)/max_tok*100)}%'></span></span>"
-            f"<span class='val'>{fmt_num(r['tin'])} in · {fmt_num(r['tout'])} out<br>${r['est_cost_usd']}</span></div>"
-            for r in by_agent) or "<p class='muted'>Chưa có dữ liệu.</p>"
+        import sqlite3
+        from tokens.tracker import estimate_cost
+        con = sqlite3.connect(_tracker.db_path)
+        con.row_factory = sqlite3.Row
 
-        daily_rows = "".join(
-            f"<tr><td>{r['day']}</td><td>{fmt_num(r['tin'])}</td>"
-            f"<td>{fmt_num(r['tout'])}</td><td>{r['calls']}</td></tr>"
-            for r in daily)
+        awhere = "" if agent_f == "all" else "AND agent = ?"
+        aparams = [] if agent_f == "all" else [agent_f]
 
-        task_rows = "".join(
-            f"<tr><td><a href='/task?id={r['task_id']}' style='color:var(--accent)'>{r['task_id']}</a></td>"
-            f"<td>{fmt_num(r['tin'])}</td><td>{fmt_num(r['tout'])}</td><td>{r['calls']}</td></tr>"
-            for r in by_task)
+        def _tot(where, params):
+            r = con.execute(
+                "SELECT COALESCE(SUM(input_tokens),0) AS tin,"
+                " COALESCE(SUM(output_tokens),0) AS tout, COUNT(*) AS calls"
+                f" FROM token_usage WHERE {where}", params).fetchone()
+            return (r["tin"] or 0, r["tout"] or 0, r["calls"] or 0)
 
-        self._send(page("Token usage",
-            f"<h1>🎟️ Token usage</h1>"
-            f"<div class='grid cols3'>"
-            f"<div class='card'><div class='stat'>{fmt_num(tot['input']+tot['output'])}</div><p class='muted'>Tổng tokens</p></div>"
-            f"<div class='card'><div class='stat'>{tot['calls']}</div><p class='muted'>API calls</p></div>"
-            f"<div class='card'><div class='stat'>{len(by_agent)}</div><p class='muted'>AI đang dùng</p></div></div>"
-            f"<h2>Theo AI (30 ngày)</h2><div class='card'>{agent_bars}</div>"
-            f"<h2>Theo ngày</h2><div class='card' style='overflow-x:auto'>"
-            f"<table class='tbl'><tr><th>Ngày</th><th>Input</th><th>Output</th><th>Calls</th></tr>{daily_rows}</table></div>"
-            f"<h2>Task tốn token nhất</h2><div class='card' style='overflow-x:auto'>"
-            f"<table class='tbl'><tr><th>Task</th><th>Input</th><th>Output</th><th>Calls</th></tr>{task_rows}</table></div>",
+        t_today = _tot("substr(ts,1,10)=substr(datetime('now'),1,10)" + awhere, aparams)
+        t_7 = _tot("ts >= datetime('now','-7 days')" + awhere, aparams)
+        t_30 = _tot("ts >= datetime('now','-30 days')" + awhere, aparams)
+
+        # Theo AI trong khoảng đã chọn
+        rows = con.execute(
+            "SELECT agent, model, SUM(input_tokens) AS tin,"
+            " SUM(output_tokens) AS tout, COUNT(*) AS calls"
+            " FROM token_usage WHERE ts >= datetime('now',?)" + awhere +
+            " GROUP BY agent, model ORDER BY tin DESC",
+            (f"-{days} days",) + tuple(aparams)).fetchall()
+
+        by_agent = {}
+        for r in rows:
+            a = r["agent"] or "?"
+            d = by_agent.setdefault(a, {"tin": 0, "tout": 0, "calls": 0, "cost": 0.0})
+            d["tin"] += r["tin"] or 0
+            d["tout"] += r["tout"] or 0
+            d["calls"] += r["calls"] or 0
+            d["cost"] += estimate_cost(r["model"] or "", r["tin"] or 0, r["tout"] or 0)
+        by_agent = sorted(by_agent.items(), key=lambda kv: kv[1]["tin"], reverse=True)
+        period_cost = sum(d["cost"] for _, d in by_agent)
+
+        # Ma trận ngày x AI
+        mrows = con.execute(
+            "SELECT substr(ts,1,10) AS day, agent,"
+            " SUM(input_tokens) AS tin, SUM(output_tokens) AS tout, COUNT(*) AS calls"
+            " FROM token_usage WHERE ts >= datetime('now',?)" + awhere +
+            " GROUP BY day, agent ORDER BY day DESC, agent",
+            (f"-{days} days",) + tuple(aparams)).fetchall()
+        con.close()
+
+        # --- Bộ lọc ---
+        def _pill(href, label, on):
+            return (f"<a href='{href}' class='pill{' on' if on else ''}'>{label}</a>")
+        day_pills = "".join(
+            _pill(f"/tokens?days={d}&agent={agent_f}", f"{d} ngày", d == days)
+            for d in (7, 14, 30))
+        agent_pills = _pill(f"/tokens?days={days}&agent=all", "Tất cả",
+                            agent_f == "all") + "".join(
+            _pill(f"/tokens?days={days}&agent={a}", f"{e} {aname[a]}", a == agent_f)
+            for a, e, _, _ in AGENT_META)
+
+        # --- Thẻ tổng quan ---
+        def _card(v_in, v_out, calls, label):
+            return (f"<div class='card'><div class='stat'>{fmt_num(v_in + v_out)}</div>"
+                    f"<p class='muted'>{label}<br><small>{fmt_num(v_in)} in · "
+                    f"{fmt_num(v_out)} out · {calls} calls</small></p></div>")
+        overview = (_card(*t_today, "Hôm nay") + _card(*t_7, "7 ngày qua")
+                    + _card(*t_30, "30 ngày qua"))
+
+        # --- Theo từng AI ---
+        max_tok = max([d["tin"] for _, d in by_agent] + [1])
+        agent_cards = ""
+        for a, d in by_agent:
+            c = acolor.get(a, "#888")
+            e = aemoji.get(a, "⚪")
+            n = aname.get(a, a)
+            w = int(d["tin"] / max_tok * 100)
+            agent_cards += (
+                f"<div class='card'><h3>{e} {html.escape(n)}</h3>"
+                f"<div class='stat'>{fmt_num(d['tin'] + d['tout'])}</div>"
+                f"<p class='muted'>{fmt_num(d['tin'])} in · {fmt_num(d['tout'])} out<br>"
+                f"{d['calls']} calls · ~${d['cost']:.4f}</p>"
+                f"<div class='tbar'><span class='track'>"
+                f"<span class='fill' style='width:{w}%;background:{c}'></span>"
+                f"</span></div></div>")
+        if not agent_cards:
+            agent_cards = "<p class='muted'>Chưa có dữ liệu trong khoảng này.</p>"
+
+        # --- Biểu đồ cột chồng SVG: token/ngày theo AI ---
+        day_list = sorted({r["day"] for r in mrows})
+        per_day = {}
+        for r in mrows:
+            per_day.setdefault(r["day"], {})[r["agent"]] = (r["tin"] or 0) + (r["tout"] or 0)
+        agents_in_chart = sorted({a for d in per_day.values() for a in d})
+        W, H, ML, MB, MT = 620, 230, 46, 30, 12
+        n = max(len(day_list), 1)
+        bw = min(34, (W - ML - 14) / n * 0.62)
+        step = (W - ML - 14) / n
+        vmax = max([sum(d.values()) for d in per_day.values()] + [1])
+        svg = [f"<svg viewBox='0 0 {W} {H}' style='width:100%;height:auto' role='img'>"]
+        # lưới ngang
+        for i in range(5):
+            y = MT + (H - MT - MB) * i / 4
+            val = vmax * (1 - i / 4)
+            svg.append(f"<line x1='{ML}' y1='{y:.0f}' x2='{W-8}' y2='{y:.0f}' "
+                       f"stroke='var(--border)' stroke-width='1'/>")
+            svg.append(f"<text x='{ML-6}' y='{y+4:.0f}' text-anchor='end' font-size='10' "
+                       f"fill='var(--muted)'>{fmt_num(int(val))}</text>")
+        for i, day in enumerate(day_list):
+            x = ML + step * i + (step - bw) / 2
+            y0 = H - MB
+            for a in agents_in_chart:
+                v = per_day[day].get(a, 0)
+                if not v:
+                    continue
+                h = (H - MT - MB) * v / vmax
+                y0 -= h
+                svg.append(f"<rect x='{x:.0f}' y='{y0:.0f}' width='{bw:.0f}' height='{h:.0f}' "
+                           f"fill='{acolor.get(a, '#888')}' rx='2'>"
+                           f"<title>{day} · {aname.get(a, a)}: {fmt_num(v)}</title></rect>")
+            if n <= 31 and (n <= 14 or i % 2 == 0):
+                svg.append(f"<text x='{x + bw/2:.0f}' y='{H-10}' text-anchor='middle' "
+                           f"font-size='10' fill='var(--muted)'>{day[5:]}</text>")
+        svg.append("</svg>")
+        legend = " ".join(
+            f"<span style='display:inline-flex;align-items:center;gap:4px;margin-right:10px'>"
+            f"<span style='width:10px;height:10px;border-radius:3px;background:{acolor.get(a, '#888')};"
+            f"display:inline-block'></span>{aemoji.get(a, '')} {aname.get(a, a)}</span>"
+            for a in agents_in_chart)
+        chart_html = ("<div class='card'>" + "".join(svg)
+                      + f"<p class='muted' style='margin-top:8px'>{legend}</p></div>"
+                      if day_list else "<p class='muted'>Chưa có dữ liệu.</p>")
+
+        # --- Bảng chi tiết ngày x AI ---
+        detail_rows = "".join(
+            f"<tr><td>{r['day']}</td>"
+            f"<td>{aemoji.get(r['agent'], '')} {html.escape(aname.get(r['agent'], r['agent'] or '?'))}</td>"
+            f"<td>{r['calls']}</td><td>{fmt_num(r['tin'])}</td>"
+            f"<td>{fmt_num(r['tout'])}</td>"
+            f"<td><b>{fmt_num((r['tin'] or 0) + (r['tout'] or 0))}</b></td></tr>"
+            for r in mrows) or ("<tr><td colspan='6' class='muted'>Chưa có dữ liệu.</td></tr>")
+
+        css_extra = ("<style>.pill{display:inline-block;padding:6px 12px;margin:0 6px 6px 0;"
+                     "border:1px solid var(--border);border-radius:99px;color:var(--text);"
+                     "text-decoration:none;font-size:.85rem;background:var(--bg2)}"
+                     ".pill.on{background:var(--accent);border-color:var(--accent);"
+                     "color:#fff;font-weight:600}</style>")
+
+        self._send(page("Token Usage", css_extra +
+            f"<h1>🎟️ Token Usage</h1>"
+            f"<div style='margin-bottom:10px'><span class='muted'>Khoảng: </span>{day_pills}</div>"
+            f"<div style='margin-bottom:14px'><span class='muted'>AI: </span>{agent_pills}</div>"
+            f"<div class='grid cols3'>{overview}</div>"
+            f"<div class='card' style='margin-top:12px'><div class='stat'>~${period_cost:.4f}</div>"
+            f"<p class='muted'>Chi phí ước tính ({days} ngày, theo bảng giá public)</p></div>"
+            f"<h2>Theo từng AI ({days} ngày)</h2><div class='grid cols3'>{agent_cards}</div>"
+            f"<h2>Biểu đồ theo ngày</h2>{chart_html}"
+            f"<h2>Chi tiết ngày × AI</h2><div class='card' style='overflow-x:auto'>"
+            f"<table class='tbl'><tr><th>Ngày</th><th>AI</th><th>Calls</th>"
+            f"<th>Input</th><th>Output</th><th>Tổng</th></tr>{detail_rows}</table></div>"
+            f"<p class='muted' style='margin-top:12px'>Số liệu từ bảng token_usage · "
+            f"LM Studio chạy local nên miễn phí · một số dòng là ước lượng (estimated=1).</p>",
             active="/tokens", user=user))
 
     def _skills_page(self, user, q, name):
@@ -864,14 +1066,23 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
         q = parse_qs(self.rfile.read(n).decode() if n else "")
 
         if p == "/login":
+            ip = self.client_address[0]
+            if not _login_allowed(ip):
+                self._send(page("Đăng nhập",
+                    "<div class='login-wrap'><div class='card'>"
+                    "<p style='color:var(--danger)'>Sai quá nhiều lần — IP bị khóa tạm thời 15 phút.</p>"
+                    "<a class='btn' href='/login'>Thử lại sau</a></div></div>"))
+                return
             user, pw = q.get("u", [""])[0], q.get("p", [""])[0]
             if verify(user, pw):
+                _login_ok(ip)
                 tok = make_session(user)
                 self.send_response(302)
-                self.send_header("Set-Cookie", f"tok={tok}; Path=/; HttpOnly; SameSite=Lax")
+                self.send_header("Set-Cookie", f"tok={tok}; Path=/; HttpOnly; SameSite=Lax; Secure")
                 self.send_header("Location", "/")
                 self.end_headers()
             else:
+                _login_failed(ip)
                 self._send(page("Đăng nhập",
                     "<div class='login-wrap'><div class='card'>"
                     "<p style='color:var(--danger)'>Sai tài khoản/mật khẩu.</p>"
@@ -884,6 +1095,15 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
             self.send_header("Location", "/login")
             self.end_headers()
             return
+
+        # CSRF: mọi POST thay đổi trạng thái phải kèm token của session
+        if p in ("/api/chat/send", "/run"):
+            if not self._csrf_ok(q):
+                self._send(page("Lỗi",
+                    "<div class='card'><p style='color:var(--danger)'>"
+                    "CSRF token không hợp lệ — tải lại trang rồi thử lại.</p></div>",
+                    user=user), 403)
+                return
 
         if p == "/api/chat/send":
             self._api_chat_send(q); return
@@ -942,4 +1162,4 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"  [bootstrap] bỏ qua: {e}")
     print(f"Tom AI Orchestra — port {PORT}")
-    HTTPServer(("0.0.0.0", PORT), H).serve_forever()
+    ThreadingHTTPServer(("0.0.0.0", PORT), H).serve_forever()

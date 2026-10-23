@@ -31,13 +31,14 @@ class GeminiAgent(BaseAgent):
     def run(self, prompt: str, system: Optional[str] = None, timeout: int = 120) -> AgentResult:
         if not self.api_key:
             return AgentResult(self.name, False, error="Thiếu GEMINI_API_KEY")
-        url = f"{API_BASE}/models/{self.model}:generateContent?key={self.api_key}"
+        url = f"{API_BASE}/models/{self.model}:generateContent"
         body = {"contents": [{"parts": [{"text": prompt}]}]}
         if system:
             body["systemInstruction"] = {"parts": [{"text": system}]}
         req = urllib.request.Request(
             url, data=json.dumps(body).encode(),
-            headers={"Content-Type": "application/json"},
+            headers={"Content-Type": "application/json",
+                     "x-goog-api-key": self.api_key},
         )
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
