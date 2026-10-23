@@ -1403,17 +1403,26 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
             fails = st.get("fails", 0)
             avg_ms = st.get("avg_ms", 0)
             ok_rate = round((calls - fails) * 100 / calls, 1) if calls else 100.0
-            # trạng thái vận hành (thay cho "tinh thần")
+            # trạng thái vận hành: kiểm tra sức khỏe provider thật
             if inflight.get(key, 0) > 0:
                 status, status_cls = "🔄 ĐANG CHẠY", "busy"
-            elif calls and fails * 2 >= calls:
-                status, status_cls = "🔴 LỖI", "error"
-            elif st.get("updated_at"):
-                status, status_cls = "🟢 SẴN SÀNG", "ready"
+                health_msg = ""
             else:
-                status, status_cls = "🟡 CHƯA KÍCH HOẠT", "stale"
+                try:
+                    from data_providers.provider_health import provider_health
+                    healthy, health_msg = provider_health(key)
+                except Exception:
+                    healthy, health_msg = True, ""
+                if not healthy:
+                    status, status_cls = "🔴 LỖI", "error"
+                elif calls and fails * 2 >= calls:
+                    status, status_cls = "🔴 LỖI", "error"
+                    health_msg = f"Tỷ lệ lỗi cao ({fails}/{calls})"
+                else:
+                    status, status_cls = "🟢 SẴN SÀNG", "ready"
             agent_perf[key] = {"calls": calls, "fails": fails,
-                               "ok_rate": ok_rate, "avg_ms": avg_ms}
+                               "ok_rate": ok_rate, "avg_ms": avg_ms,
+                               "health_msg": health_msg if 'health_msg' in dir() else ""}
             agent_rank[key] = rank
             agent_status[key] = (status, status_cls)
         avg_ok = (round(sum(p["ok_rate"] for p in agent_perf.values())
@@ -1450,7 +1459,9 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
             perf = agent_perf.get(key, {"calls": 0, "fails": 0,
                                         "ok_rate": 100.0, "avg_ms": 0})
             status, status_cls = agent_status.get(key, ("🟢 SẴN SÀNG", "ready"))
-            badge = f"<span class='ofc-badge ofc-{status_cls}'>{status}</span>"
+            health_tip = perf.get("health_msg", "")
+            tip_attr = f" title='{html.escape(health_tip)}'" if health_tip else ""
+            badge = f"<span class='ofc-badge ofc-{status_cls}'{tip_attr}>{status}</span>"
             cls = status_cls
             spd = (f"{perf['avg_ms']/1000:.1f}s" if perf["avg_ms"] else "—")
             return (
@@ -1593,7 +1604,10 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
         # ----- phòng ban (compact) -----
         def desk(key, char, name, color, role, lead=False):
             status, status_cls = agent_status.get(key, ("🟢 SẴN SÀNG", "ready"))
-            badge = f"<span class='ofc-badge ofc-{status_cls}'>{status}</span>"
+            perf_d = agent_perf.get(key, {})
+            health_tip = perf_d.get("health_msg", "")
+            tip_attr = f" title='{html.escape(health_tip)}'" if health_tip else ""
+            badge = f"<span class='ofc-badge ofc-{status_cls}'{tip_attr}>{status}</span>"
             cls = status_cls
             lead_tag = ("<div class='ofc-lead-tag'>👔 TRƯỞNG PHÒNG</div>"
                         if lead else "")
