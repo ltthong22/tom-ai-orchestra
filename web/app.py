@@ -519,6 +519,8 @@ setInterval(async ()=>{
 }, 3000);
 </script>
 """, active="/chat", user=user))
+
+    def _dashboard(self, user):
         tasks = orch.list_tasks(10)
         cards = ""
         for t in tasks:
