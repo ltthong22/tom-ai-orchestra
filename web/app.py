@@ -588,6 +588,20 @@ class H(BaseHTTPRequestHandler):
 .ava{width:22px;height:22px;border-radius:99px;display:inline-flex;align-items:center;
   justify-content:center;font-size:.8rem;flex:0 0 22px}
 .ava.gemini{background:#1a73e8} .ava.muse{background:#7c3aed}
+.msg .md{line-height:1.55;font-size:.85rem}
+.msg .md h1{font-size:1.05rem;margin:.5rem 0 .3rem}
+.msg .md h2{font-size:.98rem;margin:.5rem 0 .3rem}
+.msg .md h3{font-size:.92rem;margin:.45rem 0 .25rem}
+.msg .md h4{font-size:.88rem;margin:.4rem 0 .2rem}
+.msg .md ul,.msg .md ol{margin:.3rem 0 .3rem 1.1rem;padding:0}
+.msg .md li{margin:.15rem 0}
+.msg .md pre{background:#0d1117;border:1px solid var(--border);border-radius:6px;
+  padding:.5rem;overflow-x:auto;margin:.4rem 0;font-size:.78rem}
+.msg .md code{background:#0d1117;border:1px solid var(--border);border-radius:4px;
+  padding:.05rem .3rem;font-size:.78rem}
+.msg .md pre code{background:none;border:none;padding:0}
+.msg .md hr{border:none;border-top:1px solid var(--border);margin:.5rem 0}
+.msg .md b{color:#fff}
 .ava.lmstudio{background:#16a34a} .ava.deepseek{background:#0ea5e9}
 .ava.claude{background:#ea580c}
 .who.gemini{color:#8ab4f8} .who.muse{color:#c4b5fd}
@@ -623,6 +637,38 @@ let lastId = '';
 
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
+function md(s){
+  // escape trước, rồi render markdown cơ bản
+  let h = esc(s);
+  // code block ```...```
+  h = h.replace(/```(\\w*)\\n([\\s\\S]*?)```/g, '<pre><code>$2</code></pre>');
+  // inline code `...`
+  h = h.replace(/`([^`\\n]+)`/g, '<code>$1</code>');
+  // headers ### / ## / #
+  h = h.replace(/^#### (.*)$/gm, '<h4>$1</h4>');
+  h = h.replace(/^### (.*)$/gm, '<h3>$1</h3>');
+  h = h.replace(/^## (.*)$/gm, '<h2>$1</h2>');
+  h = h.replace(/^# (.*)$/gm, '<h1>$1</h1>');
+  // bold **...** và __...__
+  h = h.replace(/\\*\\*([^*]+)\\*\\*/g, '<b>$1</b>');
+  h = h.replace(/__([^_]+)__/g, '<b>$1</b>');
+  // italic *...* (tránh nhầm với list)
+  h = h.replace(/(^|[^*\\w])\\*([^*\\n]+)\\*/g, '$1<i>$2</i>');
+  // unordered list
+  h = h.replace(/^(?:[-*] .*(?:\\n[-*] .*)*)/gm, function(m){
+    return '<ul>' + m.replace(/^[-*] (.*)$/gm, '<li>$1</li>') + '</ul>';
+  });
+  // ordered list
+  h = h.replace(/^(?:\\d+\\. .*(?:\\n\\d+\\. .*)*)/gm, function(m){
+    return '<ol>' + m.replace(/^\\d+\\. (.*)$/gm, '<li>$1</li>') + '</ol>';
+  });
+  // horizontal rule
+  h = h.replace(/^---+$/gm, '<hr>');
+  // xuống dòng
+  h = h.replace(/\n/g, '<br>');
+  return h;
+}
+
 function renderMsg(m){
   const div = document.createElement('div');
   if(m.role === 'user'){
@@ -632,7 +678,7 @@ function renderMsg(m){
     const meta = AGENT_META[m.agent] || {label:m.agent||'AI', icon:'🤖', cls:'muse'};
     div.className = 'msg ai';
     div.innerHTML = `<div class="who ${meta.cls}"><span class="ava ${meta.cls}">${meta.icon}</span>${meta.label}</div>`
-      + esc(m.content) + `<div class="time">${(m.created_at||'').slice(11,16)}</div>`;
+      + `<div class="md">` + md(m.content) + `</div>` + `<div class="time">${(m.created_at||'').slice(11,16)}</div>`;
   }
   div.dataset.id = m.id;
   return div;
