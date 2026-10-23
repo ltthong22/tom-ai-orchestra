@@ -1,13 +1,11 @@
 """Registry các AI agent. Thêm AI mới = thêm file + 1 dòng ở đây."""
 from .base import BaseAgent, AgentResult
-from .claude import ClaudeAgent
 from .gemini import GeminiAgent
 from .lmstudio import LMStudioAgent
 from .muse import MuseAgent
 
 # Muốn thêm Groq/DeepSeek/OpenRouter: tạo file mới rồi thêm vào dict này
 AGENT_CLASSES = {
-    "claude": ClaudeAgent,
     "gemini": GeminiAgent,
     "lmstudio": LMStudioAgent,
     "muse": MuseAgent,

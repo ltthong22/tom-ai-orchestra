@@ -200,6 +200,51 @@ pre{
 .login-wrap{max-width:400px; margin:60px auto; padding:0 16px;}
 .login-wrap .card{padding:28px;}
 .tabbar{padding-bottom:80px;}
+/* ---- left icon bar ---- */
+.iconbar{
+  position:fixed; left:0; top:0; bottom:0; width:56px; z-index:100;
+  background:rgba(13,17,23,.97); border-right:1px solid var(--border);
+  display:flex; flex-direction:column; align-items:center;
+  padding:12px 0; gap:8px;
+}
+.iconbar .ib-logo{font-size:1.3rem; margin-bottom:8px;}
+.iconbar button{
+  width:40px; height:40px; border-radius:12px; border:1px solid transparent;
+  background:transparent; font-size:1.25rem; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  transition:background .15s, border-color .15s;
+}
+.iconbar button:hover{background:var(--bg3); border-color:var(--border);}
+.iconbar button.active{background:var(--accent); border-color:var(--accent);}
+.iconbar .ib-sep{width:24px; border-top:1px solid var(--border); margin:4px 0;}
+.iconbar .ib-spacer{flex:1;}
+body.has-iconbar{padding-left:56px;}
+body.has-iconbar .topbar{padding-left:16px;}
+/* ---- modal popup ---- */
+.modal-overlay{
+  position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.6);
+  display:none; align-items:center; justify-content:center; padding:16px;
+}
+.modal-overlay.open{display:flex;}
+.modal{
+  background:var(--bg2); border:1px solid var(--border);
+  border-radius:16px; max-width:640px; width:100%;
+  max-height:85vh; overflow-y:auto; padding:20px;
+  position:relative; box-shadow:0 20px 60px rgba(0,0,0,.5);
+}
+.modal-close{
+  position:absolute; top:12px; right:12px; width:32px; height:32px;
+  border-radius:99px; border:1px solid var(--border); background:var(--bg3);
+  color:var(--text); font-size:1rem; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+}
+.modal-close:hover{background:var(--bg); }
+.modal h2{margin-top:0;}
+@media(max-width:640px){
+  .iconbar{width:48px;}
+  body.has-iconbar{padding-left:48px;}
+  .iconbar button{width:36px; height:36px; font-size:1.1rem;}
+}
 """
 
 NAV_ITEMS = [
@@ -241,20 +286,107 @@ def studio_rules_text():
 
 
 def page(title, body, active="/", user=""):
-    nav = "".join(
-        f"<a href='{p}' class='{'active' if p == active else ''}'>{icon} {lbl}</a>"
-        for p, icon, lbl in NAV_ITEMS)
     return f"""<!DOCTYPE html>
 <html lang="vi"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0d1117">
 <title>{html.escape(title)} — Tom AI Orchestra</title>
 <style>{CSS}</style></head>
-<body>
+<body class="has-iconbar">
+<div class="iconbar">
+  <div class="ib-logo" title="Tom AI Orchestra">🎼</div>
+  <button id="ib-vp" title="Chuyển VP 2D / 3D">🏢</button>
+  <div class="ib-sep"></div>
+  <button id="ib-sync" title="Đồng bộ skills + quy tắc">🔄</button>
+  <div class="ib-spacer"></div>
+  <button id="ib-settings" title="Cài đặt">⚙️</button>
+</div>
+<div class="modal-overlay" id="ib-modal-ov">
+  <div class="modal">
+    <button class="modal-close" id="ib-modal-x" title="Đóng">✕</button>
+    <div id="ib-modal-body"><p class="muted">⏳ Đang tải...</p></div>
+  </div>
+</div>
 <div class="topbar"><span class="logo">🎼 Orchestra</span><span class="spacer"></span>
 {f"<span class='muted'>👤 {html.escape(user)}</span>" if user else ""}</div>
-<nav class="nav">{nav}</nav>
 <div class="wrap tabbar">{body}</div>
+<script>
+(function(){{
+  var ov = document.getElementById('ib-modal-ov');
+  var body = document.getElementById('ib-modal-body');
+  function openModal(html){{ body.innerHTML = html; ov.classList.add('open'); }}
+  function closeModal(){{ ov.classList.remove('open'); }}
+  document.getElementById('ib-modal-x').onclick = closeModal;
+  ov.onclick = function(e){{ if(e.target === ov) closeModal(); }};
+  document.addEventListener('keydown', function(e){{ if(e.key === 'Escape') closeModal(); }});
+  // VP 2D/3D toggle
+  document.getElementById('ib-vp').onclick = function(){{
+    var p = location.pathname;
+    location.href = (p === '/ai-office-3d') ? '/ai-office' : '/ai-office-3d';
+  }};
+  // highlight VP button khi đang ở trang VP
+  if(location.pathname === '/ai-office' || location.pathname === '/ai-office-3d'){{
+    document.getElementById('ib-vp').classList.add('active');
+  }}
+  // Sync popup
+  document.getElementById('ib-sync').onclick = async function(){{
+    openModal('<h2>🔄 Đồng bộ</h2><p class="muted">⏳ Đang tải...</p>');
+    try{{
+      var r = await fetch('/api/popup/sync'); var d = await r.json();
+      openModal('<h2>🔄 Đồng bộ</h2>' + d.html);
+      wireSyncButtons();
+    }}catch(e){{ openModal('<h2>🔄 Đồng bộ</h2><p>❌ Lỗi tải: '+e+'</p>'); }}
+  }};
+  function wireSyncButtons(){{
+    var b1 = document.getElementById('ib-sync-skills');
+    if(b1) b1.onclick = async function(){{
+      b1.textContent = '⏳ Đang đồng bộ skills...'; b1.disabled = true;
+      try{{
+        var r = await fetch('/api/kb/reload'); var d = await r.json();
+        b1.textContent = d.ok ? ('✅ Đã đồng bộ '+d.skills+' skills') : '❌ Lỗi';
+      }}catch(e){{ b1.textContent = '❌ Lỗi'; }}
+      b1.disabled = false;
+    }};
+    var b2 = document.getElementById('ib-sync-rules');
+    if(b2) b2.onclick = async function(){{
+      b2.textContent = '⏳ Đang đồng bộ quy tắc...'; b2.disabled = true;
+      try{{
+        var r = await fetch('/api/kb/reload'); var d = await r.json();
+        b2.textContent = d.ok ? '✅ Quy tắc đã đồng bộ' : '❌ Lỗi';
+      }}catch(e){{ b2.textContent = '❌ Lỗi'; }}
+      b2.disabled = false;
+    }};
+    var b3 = document.getElementById('ib-sync-finance');
+    if(b3) b3.onclick = async function(){{
+      b3.textContent = '⏳ Đang đồng bộ tài chính...'; b3.disabled = true;
+      try{{
+        var r = await fetch('/api/sync/finance'); var d = await r.json();
+        b3.textContent = d.ok ? '✅ Tài chính đã đồng bộ' : '❌ Lỗi';
+        document.getElementById('ib-finance-result').textContent = d.summary || '';
+      }}catch(e){{ b3.textContent = '❌ Lỗi'; }}
+      b3.disabled = false;
+    }};
+    var b4 = document.getElementById('ib-sync-library');
+    if(b4) b4.onclick = async function(){{
+      b4.textContent = '⏳ Đang đồng bộ thư viện...'; b4.disabled = true;
+      try{{
+        var r = await fetch('/api/sync/library'); var d = await r.json();
+        b4.textContent = d.ok ? '✅ Thư viện đã đồng bộ' : '❌ Lỗi';
+        document.getElementById('ib-library-result').textContent = d.summary || '';
+      }}catch(e){{ b4.textContent = '❌ Lỗi'; }}
+      b4.disabled = false;
+    }};
+  }}
+  // Settings popup
+  document.getElementById('ib-settings').onclick = async function(){{
+    openModal('<h2>⚙️ Cài đặt</h2><p class="muted">⏳ Đang tải...</p>');
+    try{{
+      var r = await fetch('/api/popup/settings'); var d = await r.json();
+      openModal('<h2>⚙️ Cài đặt</h2>' + d.html);
+    }}catch(e){{ openModal('<h2>⚙️ Cài đặt</h2><p>❌ Lỗi tải: '+e+'</p>'); }}
+  }};
+}})();
+</script>
 </body></html>"""
 
 
@@ -325,7 +457,9 @@ class H(BaseHTTPRequestHandler):
             return
 
         if p == "/":
-            self._dashboard(user); return
+            self.send_response(302)
+            self.send_header("Location", "/ai-office-3d")
+            self.end_headers(); return
         if p == "/new":
             self._new_form(user); return
         if p == "/task":
@@ -377,6 +511,59 @@ class H(BaseHTTPRequestHandler):
                 body = _json.dumps({"ok": True}).encode()
             except Exception as e:
                 body = _json.dumps({"ok": False, "error": str(e)}).encode()
+            self._send(body, 200, "application/json; charset=utf-8"); return
+        if p == "/api/popup/sync":
+            import json as _json
+            try:
+                from data_providers.knowledge import status as _kb_status
+                kb = _kb_status()
+                n_skills = kb.get("counts", {}).get("skills", 0)
+                loaded = kb.get("loaded_at", "")
+            except Exception:
+                n_skills, loaded = 0, ""
+            h = (f"<div class='card'><h3>🧠 Skills</h3>"
+                 f"<p class='muted'>{n_skills} skills đã index"
+                 + (f" · cập nhật {html.escape(str(loaded))}" if loaded else "") + "</p>"
+                 f"<button id='ib-sync-skills' class='btn'>🔄 Đồng bộ skills</button></div>"
+                 f"<div class='card' style='margin-top:12px'><h3>📏 Quy tắc studio</h3>"
+                 f"<p class='muted'>Nạp lại quy tắc + kiến thức chung cho mọi AI.</p>"
+                 f"<button id='ib-sync-rules' class='btn'>🔄 Đồng bộ quy tắc</button></div>"
+                 f"<div class='card' style='margin-top:12px'><h3>💰 Media Finance</h3>"
+                 f"<p class='muted'>Làm mới số liệu tài chính từ Finance Manager.</p>"
+                 f"<button id='ib-sync-finance' class='btn'>🔄 Đồng bộ tài chính</button>"
+                 f"<div id='ib-finance-result' class='muted' style='margin-top:8px'></div></div>"
+                 f"<div class='card' style='margin-top:12px'><h3>📚 Thư viện Muse</h3>"
+                 f"<p class='muted'>Đồng bộ toàn bộ thư viện Muse trên Drive.</p>"
+                 f"<button id='ib-sync-library' class='btn'>🔄 Đồng bộ thư viện</button>"
+                 f"<div id='ib-library-result' class='muted' style='margin-top:8px'></div></div>")
+            body = _json.dumps({"ok": True, "html": h}).encode()
+            self._send(body, 200, "application/json; charset=utf-8"); return
+        if p == "/api/sync/finance":
+            import json as _json
+            try:
+                from data_providers.finance_data import fetch_dashboard, format_summary
+                d = fetch_dashboard()
+                ok = d is not None
+                summary = format_summary() if ok else "Không kết nối được Finance Manager"
+            except Exception as e:
+                ok, summary = False, f"Lỗi: {e}"
+            body = _json.dumps({"ok": ok, "summary": summary}).encode()
+            self._send(body, 200, "application/json; charset=utf-8"); return
+        if p == "/api/sync/library":
+            import json as _json
+            try:
+                from data_providers.drive_index import index_status
+                st = index_status()
+                ok = True
+                summary = f"Thư viện Drive: {st.get('count', 0)} files đã index"
+            except Exception as e:
+                ok, summary = False, f"Lỗi: {e}"
+            body = _json.dumps({"ok": ok, "summary": summary}).encode()
+            self._send(body, 200, "application/json; charset=utf-8"); return
+        if p == "/api/popup/settings":
+            import json as _json
+            h = self._settings_html(user)
+            body = _json.dumps({"ok": True, "html": h}).encode()
             self._send(body, 200, "application/json; charset=utf-8"); return
         if p == "/logout":
             destroy_session(self._cookie_token())
@@ -866,7 +1053,7 @@ async function loadLive(){{
     }}).join('');
 
     // MACHINES & PROVIDERS
-    const order = ['gemini','lmstudio','muse','deepseek','claude'];
+    const order = ['gemini','lmstudio','muse','deepseek'];
     const sorted = agents.slice().sort((a,b)=> order.indexOf(a.agent)-order.indexOf(b.agent));
     document.getElementById('agent-cards').innerHTML = sorted.map(a=>{{
       const pct = a.max_slots ? Math.round(a.in_flight/a.max_slots*100) : 0;
@@ -1543,8 +1730,108 @@ html,body{height:100%;overflow:hidden;background:#070b12;color:#e8eef5;
  #hud-bottom{right:10px}
  #settings-btn{right:14px}#settings-panel{right:14px}
 }
+/* ---- left icon bar (3D) ---- */
+.iconbar3d{
+ position:fixed;left:0;top:0;bottom:0;width:56px;z-index:50;
+ background:rgba(10,15,25,.95);border-right:1px solid #223148;
+ display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:8px;
+}
+.iconbar3d .ib-logo{font-size:1.3rem;margin-bottom:8px}
+.iconbar3d button{
+ width:40px;height:40px;border-radius:12px;border:1px solid transparent;
+ background:transparent;font-size:1.25rem;cursor:pointer;
+ display:flex;align-items:center;justify-content:center;color:#e8eef5;
+}
+.iconbar3d button:hover{background:#1a2436;border-color:#223148}
+.iconbar3d button.active{background:#2563eb;border-color:#2563eb}
+.iconbar3d .ib-sep{width:24px;border-top:1px solid #223148;margin:4px 0}
+.iconbar3d .ib-spacer{flex:1}
+#scene{left:56px !important}
+#hud-top{left:66px !important}
+#hud-bottom{left:66px !important}
+/* ---- modal (3D) ---- */
+.modal3d-overlay{
+ position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.65);
+ display:none;align-items:center;justify-content:center;padding:16px;
+}
+.modal3d-overlay.open{display:flex}
+.modal3d{
+ background:#131a28;border:1px solid #223148;border-radius:16px;
+ max-width:640px;width:100%;max-height:85vh;overflow-y:auto;
+ padding:20px;position:relative;color:#e8eef5;
+ box-shadow:0 20px 60px rgba(0,0,0,.5);
+}
+.modal3d .card{background:#1a2436;border:1px solid #223148;border-radius:12px;padding:14px;margin-bottom:0}
+.modal3d h2{margin:0 0 12px;font-size:1.1rem}
+.modal3d h3{margin:0 0 8px;font-size:.95rem}
+.modal3d .muted{color:#9fb2c8}
+.modal3d .btn{
+ background:#2563eb;color:#fff;border:none;border-radius:8px;
+ padding:10px 18px;font-size:.9rem;cursor:pointer;margin-top:8px;
+}
+.modal3d .btn:disabled{opacity:.6}
+.modal3d-close{
+ position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:99px;
+ border:1px solid #223148;background:#1a2436;color:#e8eef5;
+ font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;
+}
 </style></head>
 <body>
+<div class="iconbar3d">
+ <div class="ib-logo" title="Tom AI Orchestra">🎼</div>
+ <button id="ib3d-vp" title="Chuyển VP 2D / 3D" class="active">🏢</button>
+ <div class="ib-sep"></div>
+ <button id="ib3d-sync" title="Đồng bộ skills + quy tắc">🔄</button>
+ <div class="ib-spacer"></div>
+ <button id="ib3d-settings" title="Cài đặt">⚙️</button>
+</div>
+<div class="modal3d-overlay" id="ib3d-modal-ov">
+ <div class="modal3d">
+  <button class="modal3d-close" id="ib3d-modal-x" title="Đóng">✕</button>
+  <div id="ib3d-modal-body"><p class="muted">⏳ Đang tải...</p></div>
+ </div>
+</div>
+<script>
+(function(){
+  var ov=document.getElementById('ib3d-modal-ov'),bd=document.getElementById('ib3d-modal-body');
+  function openM(h){bd.innerHTML=h;ov.classList.add('open');}
+  function closeM(){ov.classList.remove('open');}
+  document.getElementById('ib3d-modal-x').onclick=closeM;
+  ov.onclick=function(e){if(e.target===ov)closeM();};
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')closeM();});
+  document.getElementById('ib3d-vp').onclick=function(){location.href='/ai-office';};
+  document.getElementById('ib3d-sync').onclick=async function(){
+    openM('<h2>🔄 Đồng bộ</h2><p class="muted">⏳ Đang tải...</p>');
+    try{
+      var r=await fetch('/api/popup/sync');var d=await r.json();
+      openM('<h2>🔄 Đồng bộ</h2>'+d.html);wireSync();
+    }catch(e){openM('<h2>🔄 Đồng bộ</h2><p>❌ Lỗi: '+e+'</p>');}
+  };
+  function wireSync(){
+    var b1=document.getElementById('ib-sync-skills');
+    if(b1)b1.onclick=async function(){
+      b1.textContent='⏳ Đang đồng bộ skills...';b1.disabled=true;
+      try{var r=await fetch('/api/kb/reload');var d=await r.json();
+        b1.textContent=d.ok?('✅ Đã đồng bộ '+d.skills+' skills'):'❌ Lỗi';
+      }catch(e){b1.textContent='❌ Lỗi';}b1.disabled=false;
+    };
+    var b2=document.getElementById('ib-sync-rules');
+    if(b2)b2.onclick=async function(){
+      b2.textContent='⏳ Đang đồng bộ quy tắc...';b2.disabled=true;
+      try{var r=await fetch('/api/kb/reload');var d=await r.json();
+        b2.textContent=d.ok?'✅ Quy tắc đã đồng bộ':'❌ Lỗi';
+      }catch(e){b2.textContent='❌ Lỗi';}b2.disabled=false;
+    };
+  }
+  document.getElementById('ib3d-settings').onclick=async function(){
+    openM('<h2>⚙️ Cài đặt</h2><p class="muted">⏳ Đang tải...</p>');
+    try{
+      var r=await fetch('/api/popup/settings');var d=await r.json();
+      openM('<h2>⚙️ Cài đặt</h2>'+d.html);
+    }catch(e){openM('<h2>⚙️ Cài đặt</h2><p>❌ Lỗi: '+e+'</p>');}
+  };
+})();
+</script>
 <div id="loading">🌐 Đang dựng văn phòng 3D…</div>
 <div id="scene"></div>
 
@@ -1564,7 +1851,7 @@ html,body{height:100%;overflow:hidden;background:#070b12;color:#e8eef5;
 </div></div>
 
 <div class="hud" id="hud-bottom"><div class="card">
- <div class="sec-t">🔀 EC Shuffle — xáo folder gom chỗ cho EC Team</div>
+ <div class="sec-t">💾 Tác vụ chuyển dữ liệu ổ cứng <span style="opacity:.6;font-weight:400">(Kỹ thuật · Dữ liệu)</span></div>
  <div id="ec-steps"></div>
 </div></div>
 
@@ -1624,7 +1911,6 @@ const ZONES = [
  {id:'marketing',x:-16,  z:10,  c:0xf472b6, icon:'\U0001F4E3', label:'Marketing'},
  {id:'dulieu',   x:-5.5, z:10,  c:0x39c5ff, icon:'\U0001F5C4', label:'Dữ Liệu'},
  {id:'dieuhanh', x:5.5,  z:10,  c:0xe8b04a, icon:'\U0001F4C5', label:'Điều Hành'},
- {id:'ec',       x:16,   z:10,  c:0xf59e0b, icon:'\U0001F500', label:'EC Shuffle'},
 ];
 const zoneOf = id => ZONES.find(z=>z.id===id) || ZONES[0];
 const ST_COLOR = {busy:0xf59e0b, ready:0x22c55e, stale:0x64748b, error:0xef4444};
@@ -1851,8 +2137,6 @@ function assignTargets(){
     const ag = agents[a.key]; if(!ag) return;
     if(a.status==='busy'){
       ag.target.copy(deskFront(a.dept));
-    } else if(a.key==='muse' && ecRunning()){
-      const z = zoneOf('ec'); ag.target.set(z.x, 0, z.z + 0.6);
     }
   });
 }
@@ -1911,7 +2195,9 @@ function renderPanels(){
     return '<div><div class="fin-row"><span>💽 Ổ '+d+'</span><span class="v">'+i.free.toFixed(0)+
      'GB trống</span></div><div class="dbar"><div style="width:'+i.pct+'%;background:'+col+'"></div></div></div>';
   }).join('');
-  // ec steps
+  // ec steps — tác vụ chuyển dữ liệu ổ cứng (thuộc Kỹ thuật/Dữ liệu); xong hết thì ẩn
+  const ecAllDone = S.ec.length && S.ec.every(s=>s.status==='done' && s.pct>=100);
+  document.getElementById('hud-bottom').style.display = ecAllDone ? 'none' : '';
   $('ec-steps').innerHTML = S.ec.map(s=>{
     const cls = s.status==='done'?'#22c55e':s.status==='run'?'#f59e0b':'#475569';
     const bar = s.pct>=0
@@ -1984,9 +2270,6 @@ function animate(){
     const z = zoneOf(ag.data.dept);
     if(z._screen) z._screen.material.emissiveIntensity = ag.data.status==='busy' ? 1.2 : 0.45;
   });
-  // hiệu ứng màn hình EC khi đang chạy
-  const zec = zoneOf('ec');
-  if(zec._screen) zec._screen.material.emissiveIntensity = ecRunning() ? 1.3+Math.sin(t*4)*0.4 : 0.45;
   // robot đi hành lang (khu trung tâm giữa các phòng)
   {
     const rp = robot.group.position, rt = robot.target;
@@ -2408,6 +2691,12 @@ $('chat-form').onsubmit = async e=>{
                 f"<span class='ofc-badge {bcls}'>{blabel}</span></div>")
 
         ec_html = "".join(ec_card(*s) for s in EC_STEPS)
+        # xong hết thì ẩn luôn (thuộc Kỹ thuật · Dữ liệu, không phải phòng ban riêng)
+        ec_all_done = EC_STEPS and all(s[6] == "done" and s[7] >= 100 for s in EC_STEPS)
+        ec_section = "" if ec_all_done else (
+            f"<div class='ofc-sec-title'>💾 Tác vụ chuyển dữ liệu ổ cứng "
+            f"<span style='opacity:.6;font-weight:400'>(Kỹ thuật · Dữ liệu)</span></div>"
+            f"<div class='ofc-ec-row'>{ec_html}</div>")
         disk_html = ""
         for d in ("G", "H", "J"):
             info = drives.get(d)
@@ -2728,8 +3017,7 @@ $('chat-form').onsubmit = async e=>{
 <script>
 (function(){
 var AMETA={gemini:{label:'Gemini',icon:'🔵'},muse:{label:'Muse',icon:'🟣'},
-lmstudio:{label:'LM Studio',icon:'🟢'},deepseek:{label:'DeepSeek',icon:'🔷'},
-claude:{label:'Claude',icon:'🟠'}};
+lmstudio:{label:'LM Studio',icon:'🟢'},deepseek:{label:'DeepSeek',icon:'🔷'}};
 var panel=document.getElementById('ofc-panel'),bubble=document.getElementById('ofc-bubble'),
 box=document.getElementById('ofc-msgs'),inp=document.getElementById('ofc-text'),
 unread=document.getElementById('ofc-unread'),lastId=null,open=false,unreadN=0;
@@ -2889,8 +3177,7 @@ loadH();
                 f"<div class='ofc-org-row'>{org_html}</div>"
                 f"</div>"
                 f"{flow_html}"
-                f"<div class='ofc-sec-title'>🔀 EC Shuffle — xáo folder gom chỗ cho EC Team</div>"
-                f"<div class='ofc-ec-row'>{ec_html}</div>"
+                f"{ec_section}"
                 f"<div class='ofc-metrics' style='grid-template-columns:repeat(3,1fr)'>{disk_html}</div>"
                 f"<div class='ofc-sec-title'>🎟️ Token chi tiết theo AI</div>"
                 f"{tok_table}"
@@ -2951,7 +3238,7 @@ loadH();
             f"<div class='grid cols2' style='margin-top:12px'>{items}</div>",
             active="/skills", user=user))
 
-    def _settings(self, user):
+    def _settings_html(self, user=""):
         agents_html = ""
         try:
             from agents import list_agents, get_agent
@@ -2968,8 +3255,7 @@ loadH();
 
         n_skills = len(load_all_skills())
         warn = os.environ.get("TOKEN_WARN_THRESHOLD", "100000")
-        self._send(page("Cài đặt",
-            f"<h1>⚙️ Cài đặt</h1>"
+        return (
             f"<h2>Trạng thái AI</h2><div class='card'>{agents_html}</div>"
             f"<h2>Skills</h2><div class='card'><p>🧠 <b>{n_skills}</b> skills đã index. "
             f"<a href='/skills' style='color:var(--accent)'>Xem danh sách →</a></p></div>"
@@ -2977,7 +3263,11 @@ loadH();
             f"<p class='muted'>Ngưỡng cảnh báo token/task: <b>{warn}</b><br>"
             f"Đổi bằng env <code>TOKEN_WARN_THRESHOLD</code> khi chạy server.</p></div>"
             f"<h2>Tài khoản</h2><div class='card'><p>👤 <b>{html.escape(user)}</b></p>"
-            f"<a class='btn btn-ghost' href='/logout' style='width:auto'>Đăng xuất</a></div>",
+            f"<a class='btn btn-ghost' href='/logout' style='width:auto'>Đăng xuất</a></div>")
+
+    def _settings(self, user):
+        self._send(page("Cài đặt",
+            f"<h1>⚙️ Cài đặt</h1>" + self._settings_html(user),
             active="/settings", user=user))
 
     # ============ POST ============
