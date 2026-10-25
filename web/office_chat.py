@@ -1,7 +1,10 @@
 """Vong chat tu dong cua Van phong AI song (VP Song).
 
-- Moi gio 1 vong ngan: Gemini noi -> DeepSeek tra loi (luan phien chieu nguoc lai theo so vong).
-- Chu de lay tu trang thai that (task-bus pending, council_log, goal moi nhat) — chi DOC, khong sua.
+- Moi gio 1 vong ngan, xen ke 2 che do theo so vong:
+  + Vong LE: chu de tu trang thai that (task-bus pending, council_log, goal moi nhat) — chi DOC, khong sua.
+  + Vong CHAN: 1 agent (luan phien theo so vong) TU DE XUAT chu de kieu JARVIS, ca hai ban ve no.
+    Chu de tu tao la Y TUONG/CAU HOI/DE XUAT, khong duoc bia su kien ve studio (xem PROPOSE_PROMPT).
+- Vong that bai (khong co chu de that, provider loi) van tang so vong de vong sau doi che do nhu thuong.
 - Tin nhan do provider tao that. Tin "He thong" chi mang trang thai that, khong gan loi soan san cho agent.
 - Feed luu o data/office_chat_feed.json (ghi nguyen tu tmp+rename, khoa thread, giu toi da 200 tin).
   Feed song qua restart process cung may; tren Railway se mat khi redeploy (chua co volume).
@@ -41,6 +44,9 @@ SYSTEM_PROMPT = (
     "Ban la thanh vien hoi dong AI noi bo cua studio TomStudio, dang chat trong Van phong AI. "
     "Chi tro chuyen, nhan xet, goi y. TUYET DOI KHONG dung tien that, khong dat lenh giao dich, "
     "khong sua bot dang chay, khong sua/xoa file hay task cua user, khong goi cong cu. "
+    "KHONG bia su kien ve studio (ten show, ten khach, so tien, ngay gio, ket qua test); "
+    "su kien that chi lay tu thong tin kem theo; khong chac thi noi dang gia thuyet "
+    "('gia su...', 'neu...') chu khong khang dinh. "
     "Tra loi ngan gon 2-3 cau, tieng Viet, giong tu nhien nhu chat nhom."
 )
 
@@ -255,17 +261,58 @@ def _ask_deepseek(prompt, system):
 _ASK = {"Gemini": _ask_gemini, "DeepSeek": _ask_deepseek}
 
 
-def _run_round():
+def _bump_round(round_no):
+    """Tang so vong khi vong that bai truoc khi co tin nao (de vong sau doi che do)."""
+    with _lock:
+        feed = _read_feed()
+        if round_no > feed.get("last_round", 0):
+            feed["last_round"] = round_no
+            _write_feed(feed)
+
+
+PROPOSER_ROLE = {
+    "Gemini": "nghien cuu, thi truong, tai chinh studio, xu huong content/gear",
+    "DeepSeek": "ky thuat app, quy trinh lam viec, phuong phap trading, toi uu he thong",
+}
+
+PROPOSE_PROMPT = (
+    "Ban dang o Van phong AI cua studio TomStudio. Hay tu nghi ra 1 chu de DANG BAN cho studio "
+    "(y tuong moi, quan sat, cau hoi, de xuat cai tien) — uu tien goc nhin: {role}, nhung duoc lan san "
+    "sang linh vuc khac neu co y hay.\n"
+    "Trang thai that moi nhat (chi tham khao, khong duoc bia them su kien):\n{snapshot}\n\n"
+    "RANH GIOI TRUNG THUC: duoc tu nghi Y TUONG/CAU HOI/DE XUAT thoai mai; TUYET DOI KHONG bia SU KIEN "
+    "ve studio (khong bia ten show, ten khach, so tien, ngay gio, ket qua test). Moi su kien that chi duoc "
+    "lay tu trang thai that ke tren; neu khong chac 1 su kien co that khong thi noi dang gia thuyet "
+    "('gia su...', 'neu...') chu khong khang dinh.\n\n"
+    "Tra loi dung 2 dong:\nChu de: <1 cau ngan gon>\nLy do: <1 cau vi sao dang ban>"
+)
+
+
+def _parse_proposal(text):
+    """Tach 'Chu de:' / 'Ly do:' tu cau tra loi de xuat (chiu ca co dau/khong dau)."""
+    topic, reason = "", ""
+    for ln in (text or "").splitlines():
+        ln = ln.strip()
+        low = ln.lower()
+        if low.startswith(("chu de:", "chủ đề:")):
+            topic = ln.split(":", 1)[1].strip()
+        elif low.startswith(("ly do:", "lý do:")):
+            reason = ln.split(":", 1)[1].strip()
+    if not topic:
+        lines = [ln.strip() for ln in (text or "").splitlines() if ln.strip()]
+        topic = _short(lines[0], 120) if lines else ""
+    return _short(topic, 200), _short(reason, 200)
+
+
+def _run_real_round(round_no):
+    """Vong LE: chu de tu trang thai that, 2 tin (nguoi mo + nguoi tra loi)."""
     topic = _pick_topic()
     if not topic:
-        _log("skip: khong co chu de that")
+        _log(f"round {round_no} skip: khong co chu de that")
+        _bump_round(round_no)
         return False
-    feed = _read_feed()
-    round_no = feed.get("last_round", 0) + 1
-    if round_no % 2 == 1:
-        first_agent, second_agent = "Gemini", "DeepSeek"
-    else:
-        first_agent, second_agent = "DeepSeek", "Gemini"
+    first_agent = "Gemini" if ((round_no // 2) % 2 == 0) else "DeepSeek"
+    second_agent = "DeepSeek" if first_agent == "Gemini" else "Gemini"
     first_prompt = (
         f"Trang thai moi nhat cua studio:\n{topic}\n\n"
         "Nhan xet ngan gon 2-3 cau: dieu gi dang chu y nhat, va nen chu y gi tiep theo? "
@@ -273,6 +320,7 @@ def _run_round():
     first_text, first_meta = _ASK[first_agent](first_prompt, SYSTEM_PROMPT)
     if not first_text:
         _log(f"round {round_no} skip: {first_agent} FAIL: {first_meta}")
+        _bump_round(round_no)
         return False
     _append("Hệ thống",
             f"🔄 Vòng chat tự động #{round_no} — chủ đề từ trạng thái thật: {_short(topic, 300)}",
@@ -290,6 +338,72 @@ def _run_round():
     else:
         _log(f"round {round_no}: {second_agent} FAIL (giu vong 1 tin): {second_meta}")
     return True
+
+
+def _run_self_round(round_no):
+    """Vong CHAN kieu JARVIS: 1 agent tu de xuat chu de, ca hai ban 2 luot ngan."""
+    proposer = "Gemini" if ((round_no // 2) % 2 == 0) else "DeepSeek"
+    other = "DeepSeek" if proposer == "Gemini" else "Gemini"
+    snapshot = _pick_topic() or "Khong co du lieu that moi."
+    prompt = PROPOSE_PROMPT.format(role=PROPOSER_ROLE[proposer],
+                                   snapshot=_short(snapshot, 600))
+    prop_text, prop_meta = _ASK[proposer](prompt, SYSTEM_PROMPT)
+    if not prop_text:
+        _log(f"round {round_no} skip: {proposer} de xuat FAIL: {prop_meta}")
+        _bump_round(round_no)
+        return False
+    topic, reason = _parse_proposal(prop_text)
+    if not topic:
+        _log(f"round {round_no} skip: de xuat rong")
+        _bump_round(round_no)
+        return False
+    sys_text = f"💡 Chủ đề do {proposer} tự đề xuất: {topic}"
+    if reason:
+        sys_text += f" — {reason}"
+    _append("Hệ thống", sys_text, round_no)
+    _log(f"round {round_no}: {proposer} de xuat: {topic} | meta: {prop_meta}")
+    comment_prompt = (
+        f"Chu de do {proposer} tu de xuat: {topic}"
+        + (f" ({reason})" if reason else "")
+        + "\n\nBinh luan ngan gon 2-3 cau: thay hay/do o dau, bo sung gi? "
+        "(Chi noi, khong lam gi ca.)")
+    other_text, other_meta = _ASK[other](comment_prompt, SYSTEM_PROMPT)
+    if other_text:
+        _append(other, other_text, round_no)
+        _log(f"round {round_no}: {other} ok {other_meta}")
+    else:
+        _log(f"round {round_no}: {other} FAIL: {other_meta}")
+        take_prompt = (
+            f"Chu de ban vua de xuat: {topic}"
+            + (f" ({reason})" if reason else "")
+            + "\n\nTrinh bay ngan gon 2-3 cau ve chu de nay: vi sao no quan trong, nen bat dau tu dau? "
+            "(Chi noi, khong lam gi ca.)")
+        take_text, take_meta = _ASK[proposer](take_prompt, SYSTEM_PROMPT)
+        if take_text:
+            _append(proposer, take_text, round_no)
+            _log(f"round {round_no}: {proposer} take ok {take_meta}")
+        else:
+            _log(f"round {round_no}: {proposer} take FAIL: {take_meta}")
+        return True
+    reply_prompt = (
+        f"{other} vua binh luan:\n\"{other_text}\"\n\n"
+        "Tra loi ngan gon 2-3 cau: dong y hay phan doi diem nao, chot lai huong lam? "
+        "(Chi noi, khong lam gi ca.)")
+    reply_text, reply_meta = _ASK[proposer](reply_prompt, SYSTEM_PROMPT)
+    if reply_text:
+        _append(proposer, reply_text, round_no)
+        _log(f"round {round_no}: {proposer} ok {reply_meta}")
+    else:
+        _log(f"round {round_no}: {proposer} reply FAIL: {reply_meta}")
+    return True
+
+
+def _run_round():
+    feed = _read_feed()
+    round_no = feed.get("last_round", 0) + 1
+    if round_no % 2 == 1:
+        return _run_real_round(round_no)
+    return _run_self_round(round_no)
 
 
 def _killed():
