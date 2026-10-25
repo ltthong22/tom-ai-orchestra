@@ -53,6 +53,7 @@ SYSTEM_PROMPT = (
 
 _lock = threading.Lock()
 _started = False
+_last_error = ""
 
 
 def _log(msg):
@@ -103,7 +104,9 @@ def _write_feed(feed):
 
 
 def _append(agent, text, round_no):
+    global _last_error
     with _lock:
+        _last_error = ""
         feed = _read_feed()
         msgs = feed["messages"]
         nid = (msgs[-1]["id"] + 1) if msgs else 1
@@ -113,6 +116,15 @@ def _append(agent, text, round_no):
         feed["last_round"] = round_no
         _write_feed(feed)
         return nid
+
+
+def get_status():
+    """Trang thai vong chat cho giao dien (de hien ly do khi feed rong)."""
+    feed = _read_feed()
+    return {"loop_started": _started,
+            "last_round": feed.get("last_round", 0),
+            "msg_count": len(feed.get("messages", [])),
+            "last_error": _short(_last_error, 120) if _last_error else ""}
 
 
 def get_messages(since=0, init=False):
@@ -324,8 +336,10 @@ def _parse_proposal(text):
 
 def _run_real_round(round_no):
     """Vong LE: chu de tu trang thai that, 2 tin (nguoi mo + nguoi tra loi)."""
+    global _last_error
     topic = _pick_topic()
     if not topic:
+        _last_error = "khong co chu de that"
         _log(f"round {round_no} skip: khong co chu de that")
         _bump_round(round_no)
         return False
@@ -337,6 +351,7 @@ def _run_real_round(round_no):
         "(Chi noi, khong lam gi ca.)")
     first_text, first_meta = _ASK[first_agent](first_prompt, SYSTEM_PROMPT)
     if not first_text:
+        _last_error = str(first_meta)
         _log(f"round {round_no} skip: {first_agent} FAIL: {first_meta}")
         _bump_round(round_no)
         return False
@@ -360,6 +375,7 @@ def _run_real_round(round_no):
 
 def _run_self_round(round_no):
     """Vong CHAN kieu JARVIS: 1 agent tu de xuat chu de, ca hai ban 2 luot ngan."""
+    global _last_error
     proposer = "Gemini" if ((round_no // 2) % 2 == 0) else "DeepSeek"
     other = "DeepSeek" if proposer == "Gemini" else "Gemini"
     snapshot = _pick_topic() or "Khong co du lieu that moi."
@@ -367,11 +383,13 @@ def _run_self_round(round_no):
                                    snapshot=_short(snapshot, 600))
     prop_text, prop_meta = _ASK[proposer](prompt, SYSTEM_PROMPT)
     if not prop_text:
+        _last_error = str(prop_meta)
         _log(f"round {round_no} skip: {proposer} de xuat FAIL: {prop_meta}")
         _bump_round(round_no)
         return False
     topic, reason = _parse_proposal(prop_text)
     if not topic:
+        _last_error = "de xuat rong"
         _log(f"round {round_no} skip: de xuat rong")
         _bump_round(round_no)
         return False

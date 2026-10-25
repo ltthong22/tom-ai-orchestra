@@ -4,6 +4,12 @@ Màn hình: dashboard, giao việc mới, chi tiết task, lịch sử,
 token usage, skills, cài đặt.
 Chạy: python3 web/app.py  ->  http://localhost:8099
 """
+
+# Version hien thi tren giao dien — TANG MOI LAN SHIP BAN MOI.
+# Quy tac 26/10/2026 (anh chot): moi thu tao ra deu phai hien version + ngay
+# de phan biet ban cu/moi.
+ORCHESTRA_VERSION = "2.4"
+ORCHESTRA_VERSION_DATE = "26/10/2026"
 import html
 import json
 import os
@@ -1667,6 +1673,7 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
                 since = 0
             init = q.get("init", ["0"])[0] == "1"
             data = office_chat.get_messages(since=since, init=init)
+            data.update(office_chat.get_status())
             body = _json.dumps(data, ensure_ascii=False).encode()
             self._send(body, 200, "application/json; charset=utf-8")
         except Exception as e:
@@ -1893,6 +1900,7 @@ html,body{height:100%;overflow:hidden;background:#070b12;color:#e8eef5;
 
 <div class="hud" id="hud-top"><div class="card" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;width:100%">
  <span class="title">🌐 Văn Phòng AI 3D</span>
+ <span style="font-size:12px;color:#7cc4ff;border:1px solid #2a3d5c;border-radius:12px;padding:2px 10px">v__VERSION__ · __VERSION_DATE__</span>
  <span class="stats" id="company-stats"></span>
  <span id="ec-strip"></span>
 </div></div>
@@ -1909,7 +1917,7 @@ html,body{height:100%;overflow:hidden;background:#070b12;color:#e8eef5;
 <div class="hud" id="hud-bottom"><div class="card">
  <div class="sec-t">💾 Tác vụ chuyển dữ liệu ổ cứng <span style="opacity:.6;font-weight:400">(Kỹ thuật · Dữ liệu)</span></div>
  <div id="ec-steps"></div>
- <div class="sec-t">🔴 VP Sống · Trực tiếp <span style="opacity:.6;font-weight:400">(vòng chat tự động mỗi giờ)</span></div>
+ <div class="sec-t">🔴 VP Sống · Trực tiếp <span style="opacity:.6;font-weight:400">(vòng chat tự động mỗi giờ)</span> <span id="vp-live-status" style="text-transform:none;letter-spacing:0;color:#7cc4ff"></span></div>
  <div id="vp-live-box"></div>
 </div></div>
 
@@ -2440,11 +2448,22 @@ $('chat-form').onsubmit = async e=>{
     var s=document.createElement('span'); s.textContent=m.text||'';
     d.appendChild(b); d.appendChild(s); box.appendChild(d);
   }
+  function emptyReason(d){
+    if(!d.loop_started) return 'Vòng chat chưa chạy trên máy chủ này';
+    if(d.last_error) return 'Vòng mới nhất lỗi: '+d.last_error+' — sẽ thử lại vòng sau';
+    return 'Chờ vòng chat tiếp theo…';
+  }
+  function setStatus(d){
+    var st=document.getElementById('vp-live-status'); if(!st) return;
+    if(d.messages && d.messages.length){ st.textContent='· Vòng '+d.last_round+' · '+d.msg_count+' tin'; }
+    else { st.textContent='· '+emptyReason(d); }
+  }
   async function poll(first){
     try{
       var r=await fetch('/api/office-chat?since='+(first?0:lastId));
       var d=await r.json();
-      if(first && !d.messages.length){ box.innerHTML='<div class="muted">⏳ Chờ vòng chat tiếp theo…</div>'; return; }
+      setStatus(d);
+      if(first && !d.messages.length){ box.innerHTML='<div class="muted">⏳ '+emptyReason(d)+'</div>'; return; }
       if(first) box.innerHTML='';
       d.messages.forEach(function(m){
         if(seen[m.id]) return; seen[m.id]=1; addMsg(m);
@@ -2460,6 +2479,8 @@ $('chat-form').onsubmit = async e=>{
         body = body.replace("__STATE__", state_json)
         body = body.replace("__CSRF__", csrf)
         body = body.replace("__USER__", _h.escape(user))
+        body = body.replace("__VERSION__", ORCHESTRA_VERSION)
+        body = body.replace("__VERSION_DATE__", ORCHESTRA_VERSION_DATE)
         self._send(body)
 
 
