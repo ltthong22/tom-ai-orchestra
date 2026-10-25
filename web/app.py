@@ -269,7 +269,6 @@ NAV_ITEMS = [
     ("/tokens", "🎟️", "Token Usage"),
     ("/ai-office", "🏢", "Văn Phòng AI"),
     ("/ai-office-3d", "🌐", "VP 3D"),
-    ("/van-phong-ai-song", "💼", "VP Sống"),
     ("/skills", "🧠", "Skills"),
     ("/settings", "⚙️", "Cài đặt"),
 ]
@@ -488,7 +487,11 @@ class H(BaseHTTPRequestHandler):
         if p == "/ai-office-3d":
             self._ai_office_3d(user); return
         if p == "/van-phong-ai-song":
-            self._van_phong_ai_song(user); return
+            # Đã gộp vào /ai-office-3d — link cũ tự chuyển về trang chính.
+            self.send_response(302)
+            self.send_header("Location", "/ai-office-3d")
+            self.end_headers()
+            return
         if p == "/api/office-chat":
             self._api_office_chat(q); return
         if p == "/accounting-room":
@@ -1727,6 +1730,11 @@ html,body{height:100%;overflow:hidden;background:#070b12;color:#e8eef5;
  padding:8px 10px;pointer-events:auto}
 .ec-step .eid{font-weight:700;font-size:12px}
 .ec-step .enm{font-size:11px;color:#9fb2c8;margin:2px 0}
+#vp-live-box{max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;font-size:12px}
+.vp-live-msg{background:rgba(13,20,32,.82);border:1px solid #223148;border-radius:10px;padding:6px 10px}
+.vp-live-msg b{color:#4aa8ff}
+.vp-live-msg.sys{border-color:#16a34a}
+.vp-live-msg.sys b{color:#4ade80}
 .pbar{background:#0b1220;border-radius:8px;height:10px;overflow:hidden;margin-top:6px}
 .pfill{height:100%;border-radius:8px;transition:width .6s}
 .pmeta{font-size:11px;color:#7c8da3;margin-top:4px}
@@ -1901,6 +1909,8 @@ html,body{height:100%;overflow:hidden;background:#070b12;color:#e8eef5;
 <div class="hud" id="hud-bottom"><div class="card">
  <div class="sec-t">💾 Tác vụ chuyển dữ liệu ổ cứng <span style="opacity:.6;font-weight:400">(Kỹ thuật · Dữ liệu)</span></div>
  <div id="ec-steps"></div>
+ <div class="sec-t">🔴 VP Sống · Trực tiếp <span style="opacity:.6;font-weight:400">(vòng chat tự động mỗi giờ)</span></div>
+ <div id="vp-live-box"></div>
 </div></div>
 
 <button id="chat-bubble" title="Chat với AI">💬</button>
@@ -2418,6 +2428,32 @@ $('chat-form').onsubmit = async e=>{
     box.scrollTop=box.scrollHeight;
   }catch(err){ typing.remove(); }
 };
+
+// ---------- VP Sống · trực tiếp (gộp từ trang VP Sống cũ) ----------
+(function(){
+  var box=document.getElementById('vp-live-box'); if(!box) return;
+  var seen={}, lastId=0;
+  function addMsg(m){
+    var d=document.createElement('div');
+    d.className='vp-live-msg'+(m.agent==='Hệ thống'?' sys':'');
+    var b=document.createElement('b'); b.textContent=(m.agent||'AI')+' ';
+    var s=document.createElement('span'); s.textContent=m.text||'';
+    d.appendChild(b); d.appendChild(s); box.appendChild(d);
+  }
+  async function poll(first){
+    try{
+      var r=await fetch('/api/office-chat?since='+(first?0:lastId));
+      var d=await r.json();
+      if(first && !d.messages.length){ box.innerHTML='<div class="muted">⏳ Chờ vòng chat tiếp theo…</div>'; return; }
+      if(first) box.innerHTML='';
+      d.messages.forEach(function(m){
+        if(seen[m.id]) return; seen[m.id]=1; addMsg(m);
+        if(m.id>lastId) lastId=m.id;
+      });
+    }catch(e){}
+  }
+  poll(true); setInterval(function(){poll(false);},30000);
+})();
 </script>
 </body></html>
 """

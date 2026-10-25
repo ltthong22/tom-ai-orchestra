@@ -1,7 +1,8 @@
 """Vong chat tu dong cua Van phong AI song (VP Song).
 
 - Moi gio 1 vong ngan, xen ke 2 che do theo so vong:
-  + Vong LE: chu de tu trang thai that (task-bus pending, council_log, goal moi nhat) — chi DOC, khong sua.
+  + Vong LE: chu de tu trang thai that (task-bus pending XOAY VONG tung dot 3 task,
+    council_log, goal moi nhat) — chi DOC, khong sua.
   + Vong CHAN: 1 agent (luan phien theo so vong) TU DE XUAT chu de kieu JARVIS, ca hai ban ve no.
     Chu de tu tao la Y TUONG/CAU HOI/DE XUAT, khong duoc bia su kien ve studio (xem PROPOSE_PROMPT).
 - Vong that bai (khong co chu de that, provider loi) van tang so vong de vong sau doi che do nhu thuong.
@@ -134,13 +135,15 @@ def _short(text, limit=MAX_TEXT):
 
 
 def _pending_titles():
+    """Tat ca task pending (moi nhat truoc). Vong chat xoay vong lay tung dot 3 task
+    (con tro luu trong feed) de task nao cung duoc thao luan, khong chi 3 task moi nhat."""
     try:
         files = sorted(glob.glob(os.path.join(TASK_BUS_PENDING, "*.json")),
                        key=lambda p: os.path.getmtime(p), reverse=True)
     except Exception:
         return 0, []
     titles = []
-    for p in files[:3]:
+    for p in files:
         title = None
         try:
             with open(p, encoding="utf-8") as f:
@@ -159,8 +162,22 @@ def _pending_titles():
             base = re.sub(r"^\d{8}-\d{6}-", "", base)
             base = re.sub(r"^\d+-", "", base)
             title = base.replace("-", " ").replace("_", " ")
-        titles.append(_short(title, 120))
+        titles.append(_short(title, 90))
     return len(files), titles
+
+
+def _pending_window(titles):
+    """Lay dot 3 task tiep theo theo con tro xoay vong, luu con tro vao feed."""
+    if not titles:
+        return []
+    with _lock:
+        feed = _read_feed()
+        cur = feed.get("pending_cursor", 0) % len(titles)
+        n = min(3, len(titles))
+        window = [titles[(cur + i) % len(titles)] for i in range(n)]
+        feed["pending_cursor"] = (cur + n) % len(titles)
+        _write_feed(feed)
+    return window
 
 
 def _council_lines():
@@ -195,8 +212,9 @@ def _goal_titles():
 def _pick_topic():
     parts = []
     n, titles = _pending_titles()
-    if titles:
-        parts.append(f"Viec dang cho ({n}): " + "; ".join(titles))
+    window = _pending_window(titles)
+    if window:
+        parts.append(f"Viec dang cho ({n}, dot nay: " + "; ".join(window) + ")")
     cl = _council_lines()
     if cl:
         parts.append("Hoi dong moi nhat: " + " | ".join(cl))
