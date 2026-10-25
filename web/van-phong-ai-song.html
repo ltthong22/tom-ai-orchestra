@@ -87,11 +87,58 @@ footer{background:#111827;padding:10px 14px;display:flex;gap:10px}
 .team ul{margin:4px 0 0;padding-left:16px}
 .illus{font-size:11px;font-weight:800;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:999px;white-space:nowrap}
 .idle{font-size:11px;color:#94a3b8;font-style:italic}
+header{position:relative}
+#device-chip{position:absolute;top:10px;right:12px;font-size:11px;font-weight:800;background:rgba(255,255,255,.15);color:#fff;padding:3px 10px;border-radius:999px;white-space:nowrap}
+#live-box{border:2px solid #16a34a;border-radius:12px;padding:8px;background:#f0fdf4;display:flex;flex-direction:column;gap:10px}
+.live-head{font-size:12px;font-weight:800;color:#166534}
+#live-wait{font-size:12px;color:#64748b;text-align:center}
+#staff-toggle{display:none}
+body[data-device="phone"]{overflow-x:hidden}
+body[data-device="phone"] header{padding:8px 10px 10px}
+body[data-device="phone"] header h1{font-size:16px;padding-right:96px}
+body[data-device="phone"] header p{font-size:11px}
+body[data-device="phone"] #device-chip{top:8px;right:10px;font-size:10px;padding:2px 8px}
+body[data-device="phone"] #flow{gap:4px;margin-top:8px}
+body[data-device="phone"] .stage{padding:6px 2px;font-size:11px}
+body[data-device="phone"] .stage .n{font-size:14px}
+body[data-device="phone"] #office-panel{padding:8px}
+body[data-device="phone"] #office-panel h2{font-size:13px}
+body[data-device="phone"] #board{padding:5px 10px;font-size:11px}
+body[data-device="phone"] #table{font-size:12px}
+body[data-device="phone"] .room{font-size:10px}
+body[data-device="phone"] .av{width:44px;height:44px;font-size:24px}
+body[data-device="phone"] .name{font-size:11px}
+body[data-device="phone"] .desk{font-size:10px}
+body[data-device="phone"] .badge{font-size:10px}
+body[data-device="phone"] #staff{margin-top:6px}
+body[data-device="phone"] #staff h3{font-size:13px}
+body[data-device="phone"] .staff-note{font-size:10px}
+body[data-device="phone"] #staff-toggle{display:inline-block;margin:6px 0;padding:6px 12px;font-size:12px;font-weight:800;border-radius:999px;border:1px solid #cbd5e1;background:#fff;color:#1e293b;cursor:pointer}
+body[data-device="phone"] .staff-grid{display:none}
+body[data-device="phone"] .staff-grid.open{display:flex;flex-direction:column}
+body[data-device="phone"] .team{font-size:11px;padding:6px}
+body[data-device="phone"] footer{padding:8px;gap:6px;flex-wrap:wrap}
+body[data-device="phone"] .pcol{flex:1 1 46%;padding:8px}
+body[data-device="phone"] .pcol h3{font-size:13px}
+body[data-device="phone"] .pcol ul{font-size:12px;line-height:1.5}
+body[data-device="phone"] #chat-fab{width:52px;height:52px;font-size:24px;right:14px;bottom:14px}
+body[data-device="phone"] #chat-popup{right:12px;left:auto;width:min(340px,calc(100vw - 24px));height:55vh;bottom:78px}
+body[data-device="phone"] #chat-head h2{font-size:13px}
+body[data-device="phone"] #chat-controls button{font-size:12px;padding:7px 4px}
+body[data-device="phone"] #play-state{font-size:11px}
+body[data-device="phone"] #chat{padding:10px;gap:8px}
+body[data-device="phone"] .bubble{font-size:13px;padding:9px 11px}
+body[data-device="phone"] .bubble .who{font-size:12px}
+body[data-device="phone"] .bubble .meta{font-size:10px}
+body[data-device="phone"] #live-box{padding:6px;gap:8px}
+body[data-device="phone"] .live-head{font-size:11px}
+body[data-device="phone"] main{overflow-x:hidden}
 </style>
 </head>
 <body>
 <header>
 <h1>🏢 Văn phòng AI sống — Hội đồng AI vòng 1: Donchian</h1>
+<span id="device-chip">💻 Laptop</span>
 <p>Phát lại từ dữ liệu thật ngày 25/10/2026 (council_discuss_1.json + council_log.md). Anh ra lệnh ở main chat → Muse đẩy task qua, chia đều → các agent thảo luận với nhau → làm việc như một công ty thật → trả kết quả về main chat cho anh.</p>
 <div id="flow">
 <div class="stage" id="stage-1"><span class="n">1</span>Lệnh (main chat)</div>
@@ -116,6 +163,7 @@ footer{background:#111827;padding:10px 14px;display:flex;gap:10px}
 </div>
 <div id="staff">
 <h3>👥 Đội nhân viên AI của từng agent <span class="illus">Minh họa mô hình tuyển dụng</span></h3>
+<button id="staff-toggle">👥 Xem đội nhân viên</button>
 <p class="staff-note">Vòng council thật chỉ có 3 agent, không có nhân viên thật — đây là minh họa mô hình mỗi agent tự tuyển đội của mình.</p>
 <div class="staff-grid">
 <div class="team"><b>🦊 Gemini</b><ul>
@@ -327,6 +375,7 @@ function reset() {
   for (var i = 1; i <= 6; i++) document.getElementById("stage-" + i).classList.remove("done", "active");
   board.textContent = "Chuẩn bị phát…";
   stopLive();
+  initLive();
 }
 btnPlay.addEventListener("click", function () {
   if (playing) { stopPlay(false); return; }
@@ -342,28 +391,46 @@ document.getElementById("btn-replay").addEventListener("click", function () {
   startPlay();
 });
 /* --- TRỰC TIẾP: vòng chat tự động (feed từ /api/office-chat) --- */
-var liveTimer = null, liveStarted = false, lastLiveId = 0, liveDividerShown = false;
+var liveTimer = null, liveStarted = false, lastLiveId = 0, seenLive = {};
+var liveBox = null;
 function escHtml(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
+function ensureLiveBox() {
+  liveBox = document.getElementById("live-box");
+  if (liveBox) return liveBox;
+  liveBox = document.createElement("div");
+  liveBox.id = "live-box";
+  liveBox.innerHTML = "<div class=\"live-head\">● TRỰC TIẾP — Chat tự động</div><div id=\"live-wait\">⏳ Đang chờ vòng chat tự động đầu tiên…</div>";
+  chat.insertBefore(liveBox, chat.firstChild);
+  return liveBox;
+}
+function markLiveConnected() {
+  var dot = document.getElementById("live-dot");
+  if (dot) dot.style.display = "inline";
+}
 function liveBubble(m) {
+  if (seenLive[m.id]) return;
+  seenLive[m.id] = true;
+  var box = ensureLiveBox();
+  var wait = document.getElementById("live-wait");
+  if (wait) wait.remove();
   var cls = m.agent === "Gemini" ? "gemini" : (m.agent === "DeepSeek" ? "deepseek" : "system");
   var who = m.agent === "Gemini" ? "🦊 Gemini" : (m.agent === "DeepSeek" ? "🦈 DeepSeek" : "🔄 Hệ thống");
   var d = m.ts ? new Date(m.ts) : null;
   var hhmm = (d && !isNaN(d)) ? String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0") : "";
-  if (!liveDividerShown) {
-    var dv = document.createElement("div");
-    dv.className = "divider";
-    dv.textContent = "— TRỰC TIẾP —";
-    chat.appendChild(dv);
-    liveDividerShown = true;
-  }
-  addBubble("<div class=\"who\">" + who + "</div>" + escHtml(m.text).replace(/\n/g, "<br>") + "<div class=\"meta\">TRỰC TIẾP · " + hhmm + "</div>", cls);
+  var b = document.createElement("div");
+  b.className = "bubble " + cls;
+  b.innerHTML = "<div class=\"who\">" + who + "</div>" + escHtml(m.text).replace(/\n/g, "<br>") + "<div class=\"meta\">TRỰC TIẾP · " + hhmm + "</div>";
+  box.appendChild(b);
+  chat.scrollTop = chat.scrollHeight;
+  bumpUnread();
 }
 function pollLive() {
   fetch("/api/office-chat?since=" + lastLiveId)
     .then(function (r) { return r.json(); })
     .then(function (d) {
+      markLiveConnected();
       (d.messages || []).forEach(function (m) {
         liveBubble(m);
         if (m.id > lastLiveId) lastLiveId = m.id;
@@ -372,28 +439,59 @@ function pollLive() {
     .catch(function () {});
 }
 function startLive() {
-  if (liveStarted) return;
+  if (liveTimer) return;
   liveStarted = true;
-  document.getElementById("live-dot").style.display = "inline";
-  fetch("/api/office-chat?init=1")
-    .then(function (r) { return r.json(); })
-    .then(function (d) {
-      lastLiveId = d.latest_id || 0;
-      pollLive();
-      liveTimer = setInterval(pollLive, 30000);
-    })
-    .catch(function () {
-      liveTimer = setInterval(pollLive, 30000);
-    });
+  liveTimer = setInterval(pollLive, 30000);
+  pollLive();
 }
 function stopLive() {
   liveStarted = false;
-  liveDividerShown = false;
+  lastLiveId = 0;
+  seenLive = {};
   if (liveTimer) clearInterval(liveTimer);
   liveTimer = null;
   var dot = document.getElementById("live-dot");
   if (dot) dot.style.display = "none";
 }
+function initLive() {
+  ensureLiveBox();
+  fetch("/api/office-chat?since=0")
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      markLiveConnected();
+      (d.messages || []).forEach(function (m) {
+        liveBubble(m);
+        if (m.id > lastLiveId) lastLiveId = m.id;
+      });
+      if (!liveTimer) liveTimer = setInterval(pollLive, 30000);
+      liveStarted = true;
+    })
+    .catch(function () {
+      if (!liveTimer) liveTimer = setInterval(pollLive, 30000);
+    });
+}
+/* --- Nhận diện thiết bị: điện thoại hay laptop --- */
+var deviceChip = document.getElementById("device-chip");
+function detectDevice() {
+  var coarse = false;
+  try { coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches; } catch (e) {}
+  var touch = ("ontouchstart" in window) || (navigator.maxTouchPoints > 0);
+  var uaMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  var small = window.innerWidth <= 768;
+  var isPhone = (coarse || touch || uaMobile) && small;
+  document.body.setAttribute("data-device", isPhone ? "phone" : "laptop");
+  if (deviceChip) deviceChip.textContent = isPhone ? "📱 Điện thoại" : "💻 Laptop";
+}
+window.addEventListener("resize", detectDevice);
+window.addEventListener("orientationchange", detectDevice);
+detectDevice();
+/* --- Nút mở rộng đội nhân viên (chỉ hiện trên điện thoại) --- */
+document.getElementById("staff-toggle").addEventListener("click", function () {
+  var g = document.querySelector(".staff-grid");
+  var open = g.classList.toggle("open");
+  this.textContent = open ? "👥 Thu gọn đội nhân viên" : "👥 Xem đội nhân viên";
+});
+initLive();
 setTimeout(startPlay, 900);
 </script>
 </body>
