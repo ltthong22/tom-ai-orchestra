@@ -489,6 +489,8 @@ class H(BaseHTTPRequestHandler):
             self._ai_office_3d(user); return
         if p == "/van-phong-ai-song":
             self._van_phong_ai_song(user); return
+        if p == "/api/office-chat":
+            self._api_office_chat(q); return
         if p == "/accounting-room":
             self.send_response(302)
             self.send_header("Location", "/ai-office")
@@ -1649,6 +1651,25 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
         except FileNotFoundError:
             html_doc = "<h1>💼 VP Sống</h1><p>Trang đang được cập nhật, anh quay lại sau ít phút.</p>"
         self._send(html_doc)
+
+    def _api_office_chat(self, q):
+        """Feed chat tu dong cua VP Song — chi doc, da qua cong dang nhap."""
+        import json as _json
+        try:
+            import office_chat
+            since_raw = q.get("since", ["0"])[0]
+            try:
+                since = int(since_raw)
+            except ValueError:
+                since = 0
+            init = q.get("init", ["0"])[0] == "1"
+            data = office_chat.get_messages(since=since, init=init)
+            body = _json.dumps(data, ensure_ascii=False).encode()
+            self._send(body, 200, "application/json; charset=utf-8")
+        except Exception as e:
+            body = _json.dumps({"messages": [], "latest_id": 0,
+                                "error": str(e)}, ensure_ascii=False).encode()
+            self._send(body, 200, "application/json; charset=utf-8")
 
     def _ai_office_3d(self, user):
         """🌐 Văn Phòng AI 3D — nhân vật di chuyển, tất cả trong 1 màn hình."""
@@ -3410,4 +3431,9 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"  [bootstrap] bỏ qua: {e}")
     print(f"Tom AI Orchestra — port {PORT}")
+    try:
+        import office_chat
+        office_chat.start_loop()
+    except Exception as e:
+        print(f"  [office-chat] khong khoi dong duoc vong tu chat: {e}")
     ThreadingHTTPServer(("0.0.0.0", PORT), H).serve_forever()

@@ -156,7 +156,7 @@ footer{background:#111827;padding:10px 14px;display:flex;gap:10px}
 <button id="chat-fab" aria-label="Mở chat nhóm">💬<span id="fab-badge">0</span></button>
 <div id="chat-popup">
 <div id="chat-head">
-<div class="chat-title"><h2>💬 Chat nhóm — Hội đồng AI</h2><span class="chat-avatars">🦊 🦈 🦉</span></div>
+<div class="chat-title"><h2>💬 Chat nhóm — Hội đồng AI</h2><span class="chat-avatars">🦊 🦈 🦉</span> <span id="live-dot" style="display:none;color:#16a34a;font-weight:800;font-size:12px">● TRỰC TIẾP</span></div>
 <button id="chat-close" aria-label="Thu gọn chat">✕</button>
 </div>
 <div id="chat-controls"><span id="play-state">▶ Đang phát</span>
@@ -309,6 +309,7 @@ function stopPlay(finished) {
   clearTimeout(timer);
   btnPlay.textContent = "▶ Phát";
   state.textContent = finished ? "✓ Kết quả đã về main chat" : "⏸ Tạm dừng";
+  if (finished) startLive();
 }
 function reset() {
   stopPlay(false);
@@ -325,6 +326,7 @@ function reset() {
   document.getElementById("st-deepseek").classList.remove("meeting");
   for (var i = 1; i <= 6; i++) document.getElementById("stage-" + i).classList.remove("done", "active");
   board.textContent = "Chuẩn bị phát…";
+  stopLive();
 }
 btnPlay.addEventListener("click", function () {
   if (playing) { stopPlay(false); return; }
@@ -339,6 +341,59 @@ document.getElementById("btn-replay").addEventListener("click", function () {
   reset();
   startPlay();
 });
+/* --- TRỰC TIẾP: vòng chat tự động (feed từ /api/office-chat) --- */
+var liveTimer = null, liveStarted = false, lastLiveId = 0, liveDividerShown = false;
+function escHtml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function liveBubble(m) {
+  var cls = m.agent === "Gemini" ? "gemini" : (m.agent === "DeepSeek" ? "deepseek" : "system");
+  var who = m.agent === "Gemini" ? "🦊 Gemini" : (m.agent === "DeepSeek" ? "🦈 DeepSeek" : "🔄 Hệ thống");
+  var d = m.ts ? new Date(m.ts) : null;
+  var hhmm = (d && !isNaN(d)) ? String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0") : "";
+  if (!liveDividerShown) {
+    var dv = document.createElement("div");
+    dv.className = "divider";
+    dv.textContent = "— TRỰC TIẾP —";
+    chat.appendChild(dv);
+    liveDividerShown = true;
+  }
+  addBubble("<div class=\"who\">" + who + "</div>" + escHtml(m.text).replace(/\n/g, "<br>") + "<div class=\"meta\">TRỰC TIẾP · " + hhmm + "</div>", cls);
+}
+function pollLive() {
+  fetch("/api/office-chat?since=" + lastLiveId)
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      (d.messages || []).forEach(function (m) {
+        liveBubble(m);
+        if (m.id > lastLiveId) lastLiveId = m.id;
+      });
+    })
+    .catch(function () {});
+}
+function startLive() {
+  if (liveStarted) return;
+  liveStarted = true;
+  document.getElementById("live-dot").style.display = "inline";
+  fetch("/api/office-chat?init=1")
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      lastLiveId = d.latest_id || 0;
+      pollLive();
+      liveTimer = setInterval(pollLive, 30000);
+    })
+    .catch(function () {
+      liveTimer = setInterval(pollLive, 30000);
+    });
+}
+function stopLive() {
+  liveStarted = false;
+  liveDividerShown = false;
+  if (liveTimer) clearInterval(liveTimer);
+  liveTimer = null;
+  var dot = document.getElementById("live-dot");
+  if (dot) dot.style.display = "none";
+}
 setTimeout(startPlay, 900);
 </script>
 </body>
