@@ -269,6 +269,7 @@ NAV_ITEMS = [
     ("/tokens", "🎟️", "Token Usage"),
     ("/ai-office", "🏢", "Văn Phòng AI"),
     ("/ai-office-3d", "🌐", "VP 3D"),
+    ("/van-phong-ai-song", "💼", "VP Sống"),
     ("/skills", "🧠", "Skills"),
     ("/settings", "⚙️", "Cài đặt"),
 ]
@@ -486,6 +487,8 @@ class H(BaseHTTPRequestHandler):
             self._ai_office(user); return
         if p == "/ai-office-3d":
             self._ai_office_3d(user); return
+        if p == "/van-phong-ai-song":
+            self._van_phong_ai_song(user); return
         if p == "/accounting-room":
             self.send_response(302)
             self.send_header("Location", "/ai-office")
@@ -1636,6 +1639,16 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
                         ensure_ascii=False).encode("utf-8")
         self._send(body, 200, "application/json; charset=utf-8")
 
+
+    def _van_phong_ai_song(self, user):
+        """💼 Văn Phòng AI Sống — hội thoại nhóm nhiều agent + agent di chuyển, luồng khép kín về main chat."""
+        path = os.path.join(os.path.dirname(__file__), "van-phong-ai-song.html")
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                html_doc = f.read()
+        except FileNotFoundError:
+            html_doc = "<h1>💼 VP Sống</h1><p>Trang đang được cập nhật, anh quay lại sau ít phút.</p>"
+        self._send(html_doc)
 
     def _ai_office_3d(self, user):
         """🌐 Văn Phòng AI 3D — nhân vật di chuyển, tất cả trong 1 màn hình."""

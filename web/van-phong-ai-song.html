@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Văn phòng AI sống — Hội đồng AI vòng 1</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:#eef2f7;color:#1e293b;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+header{background:#111827;color:#fff;padding:12px 16px 14px}
+header h1{margin:0;font-size:20px}
+header p{margin:4px 0 0;color:#cbd5e1;font-size:13px}
+#flow{display:flex;gap:8px;margin-top:12px}
+.stage{flex:1;text-align:center;padding:9px 4px;border-radius:10px;background:#374151;color:#9ca3af;font-size:13px;font-weight:700;transition:background .4s,color .4s}
+.stage .n{display:block;font-size:18px}
+.stage.done{background:#14532d;color:#bbf7d0}
+.stage.active{background:#b45309;color:#fff;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.55}}
+main{flex:1;min-height:0;display:flex}
+#office-panel{width:45%;min-width:420px;padding:12px;background:#fff;border-right:1px solid #e2e8f0;display:flex;flex-direction:column}
+#office-panel h2{margin:0 0 8px;font-size:15px}
+#office{position:relative;flex:1;border:2px solid #cbd5e1;border-radius:14px;background:#eef4ff;overflow:hidden}
+#board{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:7px 14px;border-radius:9px;font-size:13px;font-weight:700;z-index:4;white-space:nowrap;max-width:94%;overflow:hidden;text-overflow:ellipsis}
+#table{position:absolute;left:50%;top:52%;transform:translate(-50%,-50%);width:36%;height:24%;background:#fcd34d;border:3px solid #d97706;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#78350f;z-index:1}
+.room{position:absolute;font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px}
+.station{position:absolute;transform:translate(-50%,-50%);text-align:center;z-index:2;transition:left 1s ease,top 1s ease}
+#st-gemini{left:14%;top:22%}
+#st-gemini.meeting{left:33%;top:52%}
+#st-deepseek{left:84%;top:22%}
+#st-deepseek.meeting{left:65%;top:52%}
+#st-claude{left:84%;top:80%}
+#st-boss{left:14%;top:80%}
+.av{width:56px;height:56px;border-radius:50%;background:#fff;border:3px solid #94a3b8;font-size:30px;display:flex;align-items:center;justify-content:center;margin:0 auto}
+.speaking .av{border-color:#f59e0b;animation:pulse 1s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(245,158,11,.6)}100%{box-shadow:0 0 0 16px rgba(245,158,11,0)}}
+.name{font-weight:800;font-size:13px;background:#fff;padding:2px 9px;border-radius:999px;display:inline-block;margin-top:5px;border:1px solid #e2e8f0}
+.desk{font-size:11px;color:#64748b;margin-top:2px}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;margin-top:3px}
+.badge.off{background:#e2e8f0;color:#475569}
+.badge.boss{background:#dbeafe;color:#1d4ed8}
+.packet{position:absolute;width:11px;height:11px;border-radius:50%;background:#f59e0b;z-index:5;transition:left 1.1s linear,top 1.1s linear;pointer-events:none}
+#chat-panel{flex:1;display:flex;flex-direction:column;min-width:0;background:#fff}
+#chat-head{padding:12px 14px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center}
+#chat-head h2{margin:0;font-size:15px}
+#play-state{font-size:13px;font-weight:700;color:#b45309}
+#chat{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;background:#f8fafc;min-height:0}
+.bubble{max-width:92%;padding:11px 13px;border-radius:14px;background:#fff;border:1px solid #e2e8f0;box-shadow:0 1px 2px rgba(0,0,0,.06);font-size:14px;line-height:1.55}
+.bubble .who{font-weight:800;font-size:13px;margin-bottom:4px}
+.bubble .meta{font-size:11px;color:#64748b;margin-top:6px}
+.bubble.gemini{border-left:5px solid #f59e0b}
+.bubble.deepseek{border-left:5px solid #0ea5e9}
+.bubble.claude{background:#f1f5f9;border-left:5px solid #94a3b8}
+.divider{align-self:center;background:#111827;color:#fff;font-size:12px;font-weight:700;padding:5px 14px;border-radius:999px}
+.system{align-self:center;background:#fef3c7;border:1px solid #f59e0b;max-width:94%}
+.note{align-self:center;font-size:12px;color:#64748b;text-align:center;max-width:94%}
+#controls{padding:10px;border-top:1px solid #e2e8f0;display:flex;gap:8px}
+#controls button{flex:1;padding:13px 6px;font-size:16px;font-weight:800;border-radius:11px;border:none;cursor:pointer}
+#btn-play{background:#2563eb;color:#fff}
+#btn-step,#btn-replay{background:#e2e8f0;color:#1e293b}
+footer{background:#111827;padding:10px 14px;display:flex;gap:10px}
+.pcol{flex:1;border-radius:11px;padding:11px 12px}
+.pcol h3{margin:0 0 7px;font-size:14px}
+.pcol ul{margin:0;padding-left:18px;font-size:13px;line-height:1.6}
+.pcol.done{background:#14532d;color:#dcfce7}
+.pcol.doing{background:#78350f;color:#ffedd5}
+.pcol.todo{background:#334155;color:#e2e8f0}
+.tag{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.2);margin-left:6px}
+.bubble.result{background:#f0fdf4;border-left:5px solid #16a34a}
+.pcol.share{background:#312e81;color:#e0e7ff}
+.badge.ok{background:#dcfce7;color:#166534}
+#staff{margin-top:10px}
+#staff h3{margin:0;font-size:14px}
+.staff-note{font-size:11px;color:#64748b;margin:4px 0 6px;line-height:1.5}
+.staff-grid{display:flex;gap:8px}
+.team{flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:8px;font-size:12px;line-height:1.5}
+.team ul{margin:4px 0 0;padding-left:16px}
+.illus{font-size:11px;font-weight:800;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.idle{font-size:11px;color:#94a3b8;font-style:italic}
+</style>
+</head>
+<body>
+<header>
+<h1>🏢 Văn phòng AI sống — Hội đồng AI vòng 1: Donchian</h1>
+<p>Phát lại từ dữ liệu thật ngày 25/10/2026 (council_discuss_1.json + council_log.md). Anh ra lệnh ở main chat → Muse đẩy task qua, chia đều → các agent thảo luận với nhau → làm việc như một công ty thật → trả kết quả về main chat cho anh.</p>
+<div id="flow">
+<div class="stage" id="stage-1"><span class="n">1</span>Lệnh (main chat)</div>
+<div class="stage" id="stage-2"><span class="n">2</span>Đẩy task</div>
+<div class="stage" id="stage-3"><span class="n">3</span>Chia đều</div>
+<div class="stage" id="stage-4"><span class="n">4</span>Thảo luận</div>
+<div class="stage" id="stage-5"><span class="n">5</span>Làm việc</div>
+<div class="stage" id="stage-6"><span class="n">6</span>Trả kết quả về main chat</div>
+</div>
+</header>
+<main>
+<div id="office-panel">
+<h2>🗺️ Sơ đồ văn phòng (nhìn từ trên xuống)</h2>
+<div id="office">
+<div id="board">Chuẩn bị phát…</div>
+<div class="room" style="top:46%;left:50%;transform:translateX(-50%)">PHÒNG HỌP</div>
+<div id="table">Bàn họp</div>
+<div class="station" id="st-gemini"><div class="av">🦊</div><div class="name">Gemini</div><div class="desk">Bàn làm việc</div><div class="badge" id="badge-gemini"></div></div>
+<div class="station" id="st-deepseek"><div class="av">🦈</div><div class="name">DeepSeek</div><div class="desk">Bàn làm việc</div><div class="badge" id="badge-deepseek"></div></div>
+<div class="station" id="st-claude"><div class="av">🦉</div><div class="name">Claude</div><div class="desk">Bàn làm việc</div><div><span class="badge off">không trả lời</span></div></div>
+<div class="station" id="st-boss"><div class="av">👨</div><div class="name">Anh (chủ studio)</div><div class="desk">Bàn làm việc</div><div><span class="badge boss">người ra lệnh</span></div></div>
+</div>
+<div id="staff">
+<h3>👥 Đội nhân viên AI của từng agent <span class="illus">Minh họa mô hình tuyển dụng</span></h3>
+<p class="staff-note">Vòng council thật chỉ có 3 agent, không có nhân viên thật — đây là minh họa mô hình mỗi agent tự tuyển đội của mình.</p>
+<div class="staff-grid">
+<div class="team"><b>🦊 Gemini</b><ul>
+<li>Chuyên viên phân tích kỹ thuật · Thạc sĩ Tài chính định lượng · Skill: Python, backtest, đọc chart</li>
+<li>Chuyên viên thống kê · Cử nhân Toán ứng dụng · Skill: kiểm định thống kê, phát hiện overfitting</li>
+</ul></div>
+<div class="team"><b>🦈 DeepSeek</b><ul>
+<li>Chuyên viên kiểm chứng phương pháp · Thạc sĩ Khoa học dữ liệu · Skill: Python, đánh giá edge, multiple-testing</li>
+<li>Chuyên viên dữ liệu thị trường · Cử nhân CNTT · Skill: thu thập dữ liệu, lọc nhiễu</li>
+</ul></div>
+<div class="team"><b>🦉 Claude</b> <span class="idle">vòng này không tham gia</span><ul>
+<li>Chuyên viên tổng hợp báo cáo · Thạc sĩ Quản trị · Skill: viết báo cáo, đối chiếu số liệu</li>
+<li>Trợ lý nghiên cứu · Cử nhân Kinh tế · Skill: tra cứu, tóm tắt</li>
+</ul></div>
+</div>
+</div>
+</div>
+<div id="chat-panel">
+<div id="chat-head"><h2>💬 Chat nhóm — Hội đồng AI</h2><span id="play-state">▶ Đang phát</span></div>
+<div id="chat"></div>
+<div id="controls">
+<button id="btn-play">⏸ Tạm dừng</button>
+<button id="btn-step">⏭ Từng bước</button>
+<button id="btn-replay">↻ Chạy lại</button>
+</div>
+</div>
+</main>
+<footer>
+<div class="pcol done"><h3>✅ ĐÃ XONG <span class="tag">3 việc</span></h3><ul>
+<li>Sweep Donchian 1.143.180 bộ (25/10, 08:09)</li>
+<li>Thảo luận 2 vòng: Gemini + DeepSeek (08:10)</li>
+<li>Quyết định vòng sau: giữ Donchian, thu hẹp quanh best</li>
+</ul></div>
+<div class="pcol doing"><h3>🔄 ĐANG LÀM <span class="tag">1 việc</span></h3><ul>
+<li>Chạy vòng sau Donchian thu hẹp (p_ins 135/140/145, p_outs 50/53/56)</li>
+</ul></div>
+<div class="pcol todo"><h3>⬜ CHƯA LÀM <span class="tag">2 việc</span></h3><ul>
+<li>Chốt phương pháp cuối cùng sau đủ vòng</li>
+<li>Áp dụng phương pháp chốt vào bot</li>
+</ul></div>
+<div class="pcol share"><h3>⚖️ CHIA VIỆC ĐỀU <span class="tag">3 phần bằng nhau</span></h3><ul>
+<li>🦊 Gemini — 1/3: đánh giá độc lập + phản hồi ✅</li>
+<li>🦈 DeepSeek — 1/3: đánh giá độc lập + phản hồi ✅</li>
+<li>🦉 Claude — 1/3: không trả lời ❌</li>
+</ul></div>
+</footer>
+<script>
+var MSGS = {
+v1claude: {cls: "claude", who: "🦉 Claude", meta: "Vòng 1 · Đề xuất độc lập", html: "Không trả lời vòng này. (Ngồi tại bàn làm việc suốt buổi thảo luận.)"},
+v1gemini: {cls: "gemini", who: "🦊 Gemini", meta: "Vòng 1 · Đề xuất độc lập", html: "Chẩn đoán: thắng vì bắt được trend dài BTC (p_in = 140 ~ 6 ngày), test giữ lợi nhuận nhờ biến động thuận chiều. Thua vì trung vị âm (−1,62%) và tỷ lệ Pass cực thấp (0,002%) → Donchian bị quét (whipsaw) ở đa số tham số khác.<br><br>Cảnh báo overfitting: CỰC CAO. n = 5 quá nhỏ, không có giá trị thống kê. Top 10 thực chất là 1 cụm tham số duy nhất (p_in 140, p_out 53) lặp lại → thắng là may mắn trong giai đoạn test ngắn.<br><br>Đề xuất vòng sau: supertrend · atr_ps [10, 12, 14, 20] · mults [1.5, 2.0, 2.5, 3.0]."},
+v1deepseek: {cls: "deepseek", who: "🦈 DeepSeek", meta: "Vòng 1 · Đề xuất độc lập", html: "Top chiến lược thực chất là cùng 1 cấu hình p_in = 140, p_out = 53 trên BTCUSDT 1h, chỉ khác mult — tất cả cho test +20,6% giống hệt nhau. Nghĩa là mult không phân biệt được gì; n = 5 lệnh trong 90 ngày, +20,6% đến từ 2 lệnh thắng lớn (WR 40% = 2/5) → 2 sự kiện may mắn, không phải edge thống kê. p_in nhích 140 → 142 cho cùng kết quả = plateau giả. Train +21,9% ≈ test +20,6% chỉ là cùng một regime BTC trending mạnh, không chứng minh generalization.<br><br>Kết luận: top thắng vì 1 xu hướng BTC mạnh + cửa sổ test trùng regime, không phải Donchian 140/53 có edge. Thua (median −1,62%, mean +0,48%) mới phản ánh đúng: đa số config không có edge, mean bị kéo lên bởi vài outlier.<br><br>Overfitting: CÓ, nặng. n = 5 &lt; ngưỡng tin cậy (cần ≥ 30–50 lệnh). 1.143.180 bộ test → multiple testing cực lớn, pass 26/1,1M ≈ 0,0023% — không có ý nghĩa. Gate n ≥ 15 bị lọt vì top chỉ n = 5.<br><br>Đề xuất DUY NHẤT vòng sau: supertrend · atr_ps [10, 14, 20] · mults [2.0, 2.5, 3.0, 3.5], bắt buộc n ≥ 30 ở bước lọc. SuperTrend ít bậc tự do hơn Donchian (12 tổ hợp vs hàng trăm), mult lớn giảm whipsaw → tăng n, giảm top 10 giả. Không chọn lại Donchian 140/53 vì đã chứng minh là artifact n = 5."},
+v2claude: {cls: "claude", who: "🦉 Claude", meta: "Vòng 2 · Phản hồi nhau", html: "Không trả lời vòng này. (Vẫn ngồi tại bàn làm việc.)"},
+v2deepseek: {cls: "deepseek", who: "🦈 DeepSeek", meta: "Vòng 2 · Phản hồi nhau", html: "Đồng ý với DeepSeek, phản đối Gemini ở điểm chính.<br><br>Đồng ý DeepSeek: top 10 là 1 cấu hình duy nhất lặp lại — mult không phân biệt (test y hệt +20,6%), n = 5 = 2 lệnh thắng gánh. Mean +0,48% vs median −1,62% → edge bị kéo bởi outlier, đa số config không có edge. Train ≈ Test = cùng regime trend BTC, không chứng minh generalization.<br><br>Phản đối Gemini: Gemini nói p_in = 140 ~ 6 ngày và Pass 0,002% — số này không khớp dữ liệu (26 pass, không phải 0,002%). Nhưng kết luận overfitting của Gemini đúng hướng; chỉ số liệu sai.<br><br>Bổ sung: 1.143.180 bộ test → multiple-testing cực lớn; gate n ≥ 15 bị lọt vì top chỉ n = 5. Cần phương pháp nhiều lệnh hơn và ít tham số hơn.<br><br>Đề xuất vòng sau: ema_cross · fast [8, 12, 20] · slow [34, 55, 89] · tf [1h, 4h]. EMA cross tạo nhiều tín hiệu hơn Donchian 140 bar → n tăng, ít tham số (6 tổ hợp × 2 tf = 12) → giảm multiple-testing, dễ đánh giá median thay vì bị outlier chi phối."},
+v2gemini: {cls: "gemini", who: "🦊 Gemini", meta: "Vòng 2 · Phản hồi nhau", html: "Đồng ý hoàn toàn với DeepSeek: overfitting cực nặng. Với 1.143.180 bộ test mà chỉ có 26 bộ Pass (tỷ lệ 0,002%) thì kết quả Top 10 hoàn toàn là ngẫu nhiên (noise).<br><br>Điểm yếu cốt lõi: n = 5 lệnh trong 90 ngày quá ít, không có giá trị thống kê. Kết quả dương chỉ nhờ 1–2 sóng trend lớn của BTC, không phải nội tại phương pháp Donchian.<br><br>Chẩn đoán: Donchian bị nhiễu (whipsaw) mạnh ở trung vị (−1,62%). Cần bộ lọc động để loại vùng đi ngang.<br><br>Đề xuất vòng sau: chuyển sang Supertrend để tận dụng ATR làm màng lọc biến động, cải thiện trung vị và tăng n để kiểm chứng thống kê. supertrend · atr_period [10, 12, 14, 21] · multiplier [1.5, 2.0, 2.5, 3.0, 4.0]."}
+};
+var STEPS = [
+{stage: 1, board: "Anh ra lệnh — hội đồng bắt đầu", dur: 4500, sys: "📋 <b>Lệnh của anh (chủ studio):</b> Chạy hội đồng AI vòng 1 — sweep Donchian 1.143.180 bộ trên crypto, xem top thắng có phải edge thật không, rồi quyết phương pháp vòng sau."},
+{stage: 2, board: "Task đã đẩy qua hội đồng — kèm dữ liệu sweep", dur: 5500, sys: "📊 <b>Task đã đẩy qua hội đồng, kèm dữ liệu sweep trên laptop (08:09):</b> Donchian · 1.143.180 bộ · trung bình +0,48% · trung vị −1,62% · lỗi 48,4% · pass 26 bộ. Top test 90 ngày: BTCUSDT 1h, p_in 140 / p_out 53, test +20,6%, WR 40% (n = 5) — top 10 toàn cấu hình này."},
+{stage: 3, board: "Chia việc đều — mỗi agent 1/3", dur: 6000, badges: true, sys: "⚖️ <b>Task chia đều 3 phần bằng nhau:</b> mỗi agent 1 phần — đọc sweep, chẩn đoán thắng/thua, đánh giá overfitting, đề xuất vòng sau. Mỗi agent tự điều đội nhân viên của mình làm phần việc. Không ai gánh hết. (Claude nhận phần nhưng không trả lời.)"},
+{stage: 4, board: "Thảo luận: Gemini + DeepSeek tới bàn họp", dur: 2800, move: "meeting"},
+{stage: 4, board: "Vòng 1: đề xuất độc lập", dur: 2800, divider: "Vòng 1 · Đề xuất độc lập", msg: "v1claude"},
+{stage: 4, board: "Vòng 1: đề xuất độc lập", dur: 8500, msg: "v1gemini", speak: "gemini"},
+{stage: 4, board: "Vòng 1: đề xuất độc lập", dur: 9500, msg: "v1deepseek", speak: "deepseek"},
+{stage: 4, board: "Vòng 2: phản hồi nhau", dur: 2800, divider: "Vòng 2 · Phản hồi nhau", msg: "v2claude"},
+{stage: 4, board: "Vòng 2: phản hồi nhau", dur: 9500, msg: "v2deepseek", speak: "deepseek", packet: ["deepseek", "gemini"]},
+{stage: 4, board: "Vòng 2: phản hồi nhau", dur: 8500, msg: "v2gemini", speak: "gemini", packet: ["gemini", "deepseek"]},
+{stage: 5, board: "Thảo luận xong — về bàn làm việc", dur: 2800, move: "desk"},
+{stage: 5, board: "Đã có quyết định vòng sau", dur: 7000, sys: "✅ <b>Quyết định vòng này (08:10):</b> không trích được phương pháp mới → giữ nguyên family Donchian, thu hẹp quanh best: p_ins [135, 140, 145] · p_outs [50, 53, 56] · mults [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3].", note: "Ghi chú: nội dung tin nhắn đã rút gọn từ council_discuss_1.json, giữ nguyên số liệu và luận điểm, không thêm ý mới. Claude không trả lời cả 2 vòng."},
+{stage: 6, board: "Kết quả đã trả về main chat cho anh", dur: 8000, result: true}
+];
+var chat = document.getElementById("chat");
+var board = document.getElementById("board");
+var state = document.getElementById("play-state");
+var btnPlay = document.getElementById("btn-play");
+var idx = 0, timer = null, playing = false;
+function setStage(n) {
+  for (var i = 1; i <= 6; i++) {
+    var el = document.getElementById("stage-" + i);
+    el.classList.remove("done", "active");
+    if (i < n) el.classList.add("done");
+    if (i === n) el.classList.add("active");
+  }
+}
+function clearSpeak() {
+  ["gemini", "deepseek", "claude"].forEach(function (a) {
+    document.getElementById("st-" + a).classList.remove("speaking");
+  });
+}
+function packet(from, to) {
+  var box = document.getElementById("office").getBoundingClientRect();
+  var a = document.getElementById("st-" + from).getBoundingClientRect();
+  var b = document.getElementById("st-" + to).getBoundingClientRect();
+  var dot = document.createElement("div");
+  dot.className = "packet";
+  dot.style.left = (a.left - box.left + a.width / 2) + "px";
+  dot.style.top = (a.top - box.top + 20) + "px";
+  document.getElementById("office").appendChild(dot);
+  requestAnimationFrame(function () {
+    dot.style.left = (b.left - box.left + b.width / 2) + "px";
+    dot.style.top = (b.top - box.top + 20) + "px";
+  });
+  setTimeout(function () { dot.remove(); }, 1400);
+}
+function addBubble(html, cls) {
+  var d = document.createElement("div");
+  d.className = "bubble " + (cls || "");
+  d.innerHTML = html;
+  chat.appendChild(d);
+  chat.scrollTop = chat.scrollHeight;
+}
+function runStep() {
+  if (idx >= STEPS.length) { stopPlay(true); return; }
+  var s = STEPS[idx];
+  setStage(s.stage);
+  board.textContent = s.board;
+  clearSpeak();
+  if (s.move === "meeting") {
+    document.getElementById("st-gemini").classList.add("meeting");
+    document.getElementById("st-deepseek").classList.add("meeting");
+  }
+  if (s.move === "desk") {
+    document.getElementById("st-gemini").classList.remove("meeting");
+    document.getElementById("st-deepseek").classList.remove("meeting");
+  }
+  if (s.divider) {
+    var dv = document.createElement("div");
+    dv.className = "divider";
+    dv.textContent = s.divider;
+    chat.appendChild(dv);
+  }
+  if (s.sys) addBubble(s.sys, "system");
+  if (s.msg) {
+    var m = MSGS[s.msg];
+    addBubble("<div class=\"who\">" + m.who + "</div>" + m.html + "<div class=\"meta\">" + m.meta + "</div>", m.cls);
+  }
+  if (s.speak) document.getElementById("st-" + s.speak).classList.add("speaking");
+  if (s.packet) packet(s.packet[0], s.packet[1]);
+  if (s.badges) {
+    var bg = document.getElementById("badge-gemini"); bg.textContent = "1/3 việc ✓"; bg.className = "badge ok";
+    var bd = document.getElementById("badge-deepseek"); bd.textContent = "1/3 việc ✓"; bd.className = "badge ok";
+  }
+  if (s.result) addBubble("📤 <b>Trả về main chat:</b> Muse gửi kết quả cho anh — Hội đồng kết luận top Donchian là overfitting (n = 5, top 10 thực chất là 1 cấu hình duy nhất). Quyết định vòng sau: giữ Donchian, thu hẹp quanh best: p_ins [135, 140, 145] · p_outs [50, 53, 56].", "result");
+  if (s.note) {
+    var nt = document.createElement("div");
+    nt.className = "note";
+    nt.textContent = s.note;
+    chat.appendChild(nt);
+    chat.scrollTop = chat.scrollHeight;
+  }
+  idx++;
+  if (playing) timer = setTimeout(runStep, s.dur);
+}
+function startPlay() {
+  playing = true;
+  btnPlay.textContent = "⏸ Tạm dừng";
+  state.textContent = "▶ Đang phát";
+  timer = setTimeout(runStep, 600);
+}
+function stopPlay(finished) {
+  playing = false;
+  clearTimeout(timer);
+  btnPlay.textContent = "▶ Phát";
+  state.textContent = finished ? "✓ Kết quả đã về main chat" : "⏸ Tạm dừng";
+}
+function reset() {
+  stopPlay(false);
+  idx = 0;
+  chat.innerHTML = "";
+  clearSpeak();
+  document.getElementById("badge-gemini").textContent = "";
+  document.getElementById("badge-gemini").className = "badge";
+  document.getElementById("badge-deepseek").textContent = "";
+  document.getElementById("badge-deepseek").className = "badge";
+  document.getElementById("st-gemini").classList.remove("meeting");
+  document.getElementById("st-deepseek").classList.remove("meeting");
+  for (var i = 1; i <= 6; i++) document.getElementById("stage-" + i).classList.remove("done", "active");
+  board.textContent = "Chuẩn bị phát…";
+}
+btnPlay.addEventListener("click", function () {
+  if (playing) { stopPlay(false); return; }
+  if (idx >= STEPS.length) reset();
+  startPlay();
+});
+document.getElementById("btn-step").addEventListener("click", function () {
+  stopPlay(false);
+  runStep();
+});
+document.getElementById("btn-replay").addEventListener("click", function () {
+  reset();
+  startPlay();
+});
+setTimeout(startPlay, 900);
+</script>
+</body>
+</html>
