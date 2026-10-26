@@ -8,7 +8,7 @@ Chạy: python3 web/app.py  ->  http://localhost:8099
 # Version hien thi tren giao dien — TANG MOI LAN SHIP BAN MOI.
 # Quy tac 26/10/2026 (anh chot): moi thu tao ra deu phai hien version + ngay
 # de phan biet ban cu/moi.
-ORCHESTRA_VERSION = "2.6"
+ORCHESTRA_VERSION = "2.7"
 ORCHESTRA_VERSION_DATE = "26/10/2026"
 import html
 import json
@@ -1612,6 +1612,7 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
         # so file task-bus pending (viec cho anh duyet, chi dem, khong doi trang thai file).
         # Khong doi vong chat, task-bus, dashboard hay provider nao.
         vp = {"vp_topic": "", "vp_speakers": [], "vp_pending_count": 0,
+              "vp_pending_by_agent": {}, "vp_pending_has_agent": False,
               "vp_pending_titles": [],
               "vp_last_round": 0, "vp_last_error": "", "vp_loop_started": False}
         try:
@@ -1643,6 +1644,13 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
                 _a["speech"] = "Nghỉ — chờ vòng chat sau"
             else:
                 _a["speech"] = "Sẵn sàng — chờ việc mới"
+            # (a) So viec cho theo tung agent — CHI khi task-bus co truong gan
+            # agent that (vp_pending_by_agent). Khong co -> 0, giao dien giu
+            # nguyen tong o dai trang thai, khong bia phan bo tu from/to.
+            _by = vp.get("vp_pending_by_agent") or {}
+            _by_low = {str(k).strip().lower(): v for k, v in _by.items()}
+            _a["pending_count"] = _by_low.get(_key.lower(),
+                                              _by_low.get(_nm.lower(), 0))
         fin = {}
         try:
             from data_providers.finance_data import fetch_dashboard, is_configured
@@ -2381,6 +2389,9 @@ function renderPanels(){
     const prepaid = a.prepaid ? '<br><span class="tok">💰 Prepaid (không refill)</span>' : '';
     const br = 'br-'+(a.display_status||'resting');
     const speech = a.speech ? '<br><span class="agent-speech">💬 “'+a.speech+'”</span>' : '';
+    // (a) Chi hien khi task-bus co gan agent that (pending_count>0); khong co
+    // thi khong hien so le tren the — tong van o dai trang thai + loi thoai.
+    const pendTxt = (a.pending_count||0) > 0 ? '<br><span class="tok">⏳ '+(a.pending_count)+' việc chờ của agent này</span>' : '';
     // Nhan phan loai canh ten — chi phan anh trang thai DA CO (khong bia trang thai moi):
     // muse/muse_main + co viec pending = "Cho duyet" (giong muc "cho sep duyet" o trang 2D);
     // agent noi o vong moi nhat = "Dang ban"; con lai theo display_status.
@@ -2392,7 +2403,7 @@ function renderPanels(){
     else if(_spk.indexOf(a.name)>=0) _cls = ['Đang bàn','cls-chat'];
     else if(a.display_status==='resting') _cls = ['Nghỉ','cls-rest'];
     return '<div class="agent-row '+br+'" data-name="'+a.name.toLowerCase()+'" data-status="'+(a.display_status||'resting')+'"><span class="agent-dot" style="background:'+a.color+'"></span>'+
-     '<span><span class="an">'+a.char+' '+a.name+'</span> <span class="cls-pill '+_cls[1]+'">'+_cls[0]+'</span>'+refill+speech+'<br><span class="tok">🎟️ 1d:'+fmtT(t1.tokens)+
+     '<span><span class="an">'+a.char+' '+a.name+'</span> <span class="cls-pill '+_cls[1]+'">'+_cls[0]+'</span>'+refill+speech+pendTxt+'<br><span class="tok">🎟️ 1d:'+fmtT(t1.tokens)+
      ' · 7d:'+fmtT(t7.tokens)+' · 30d:'+fmtT(t30.tokens)+cost30+'</span>'+prepaid+'</span>'+
      '<button class="row-action" title="Xem lời thoại của agent này">💬</button>'+
      '<span class="st '+t[1]+'">'+t[0]+'</span></div>';
@@ -3038,6 +3049,65 @@ $('chat-form').onsubmit = async e=>{
         except Exception:
             pass
 
+        # ---------- (b) Pattern v2.6 tu trang 3D: dai trang thai + loi thoai
+        # (chi hien thi, dung lai get_vp_summary() cua office_chat, khong doi
+        # vong chat / task-bus / luat duyet). Resting: trang 2D khong co
+        # trang thai nghi rieng (ready = cho viec) nen dem = 0, hien that.
+        vp2 = {"vp_topic": "", "vp_speakers": [], "vp_pending_count": 0,
+               "vp_pending_by_agent": {}, "vp_last_round": 0}
+        try:
+            import office_chat as _oc2
+            vp2 = _oc2.get_vp_summary()
+        except Exception:
+            pass
+        _pend2 = vp2.get("vp_pending_count") or 0
+        _spk2 = vp2.get("vp_speakers") or []
+        _topic2 = vp2.get("vp_topic") or ""
+        _by2 = {str(k).strip().lower(): v
+                for k, v in (vp2.get("vp_pending_by_agent") or {}).items()}
+        _vp_counts2 = {
+            "total": len(AGENTS),
+            "running": sum(1 for v in agent_status.values() if v[1] == "busy"),
+            "waiting": sum(1 for v in agent_status.values() if v[1] == "ready"),
+            "resting": 0,
+            "error": sum(1 for v in agent_status.values() if v[1] == "error"),
+        }
+        vp_strip2 = (
+            f"<div class='ofc-vp-strip'>👥 <b>{_vp_counts2['total']} agent</b> · "
+            f"🟢 <b>{_vp_counts2['running']}</b> Đang chạy · "
+            f"🟠 <b>{_vp_counts2['waiting']}</b> Chờ việc · "
+            f"⚪ <b>{_vp_counts2['resting']}</b> Đang nghỉ · "
+            f"🔴 <b>{_vp_counts2['error']}</b> Gặp sự cố · "
+            f"⏳ <b>{_pend2}</b> việc chờ anh duyệt"
+            + (f" · 💬 Vòng {vp2.get('vp_last_round')}" if vp2.get("vp_last_round") else "")
+            + "</div>")
+        if not vp2.get("vp_last_round"):
+            vp_strip2 += (
+                "<div class='ofc-empty'>Chưa có vòng chat nào — vòng chat chạy "
+                "tự động mỗi giờ, không cần bấm gì. Tin đầu tiên sẽ hiện ở "
+                "khung chat VP Sống trên trang 3D.</div>")
+
+        def _speech2(key, name):
+            _st, _cls = agent_status.get(key, ("🟢 SẴN SÀNG", "ready"))
+            if _cls == "error":
+                return "Gặp sự cố — kiểm tra provider"
+            if _cls == "busy":
+                return "Đang chạy task"
+            if key == "muse" and _pend2 > 0:
+                return "Chờ anh duyệt: %d việc đang chờ" % _pend2
+            if name in _spk2 and _topic2:
+                return "Đang bàn: " + _topic2
+            if name in _spk2:
+                return "Đang bàn trong vòng chat mới nhất"
+            if key in ("gemini", "deepseek"):
+                return "Nghỉ — chờ vòng chat sau"
+            return "Sẵn sàng — chờ việc mới"
+
+        def _pend_txt2(key, name):
+            n = _by2.get(key.lower(), _by2.get(name.lower(), 0))
+            return (f"<div class='ofc-pend'>⏳ {n} việc chờ của agent này</div>"
+                    if n > 0 else "")
+
         def hero(key, char, name, color, persona, role):
             t = tok.get(key, {})
             d1 = t.get(1, {"tokens": 0, "calls": 0, "cost": 0})
@@ -3059,7 +3129,9 @@ $('chat-form').onsubmit = async e=>{
                 f"<div class='ofc-name' style='border-color:{color}'>"
                 f"<span class='ofc-dot' style='background:{color}'></span>{html.escape(name)}</div>"
                 f"<div class='ofc-persona'>“{persona}”</div>"
-                f"<div class='ofc-role'>{role}</div>{badge}"
+                f"<div class='ofc-role'>{role}</div>"
+                f"<div class='ofc-speech'>💬 “{html.escape(_speech2(key, name))}”</div>"
+                f"{_pend_txt2(key, name)}{badge}"
                 f"<div class='ofc-perf'>✅ {perf['ok_rate']}% · "
                 f"⚡ {spd} · 🔢 {perf['calls']} task</div>"
                 f"<div class='ofc-promo' title='{RANK_PROMO[rank]}'>⬆️ {RANK_PROMO[rank]}</div>"
@@ -3156,7 +3228,7 @@ $('chat-form').onsubmit = async e=>{
         # xong hết thì ẩn luôn (thuộc Kỹ thuật · Dữ liệu, không phải phòng ban riêng)
         ec_all_done = EC_STEPS and all(s[6] == "done" and s[7] >= 100 for s in EC_STEPS)
         ec_section = "" if ec_all_done else (
-            f"<div class='ofc-sec-title'>💾 Tác vụ chuyển dữ liệu ổ cứng "
+            f"<div class='ofc-sec-title ofc-hide-simple'>💾 Tác vụ chuyển dữ liệu ổ cứng "
             f"<span style='opacity:.6;font-weight:400'>(Kỹ thuật · Dữ liệu)</span></div>"
             f"<div class='ofc-ec-row'>{ec_html}</div>")
         disk_html = ""
@@ -3220,7 +3292,9 @@ $('chat-form').onsubmit = async e=>{
                 f"<div class='ofc-name' style='border-color:{color}'>"
                 f"<span class='ofc-dot' style='background:{color}'></span>"
                 f"{html.escape(name)}</div>"
-                f"<div class='ofc-role'>{role}</div>{badge}{_tok_html}</a>")
+                f"<div class='ofc-role'>{role}</div>"
+                f"<div class='ofc-speech'>💬 “{html.escape(_speech2(key, name))}”</div>"
+                f"{_pend_txt2(key, name)}{badge}{_tok_html}</a>")
 
         sections = []
 
@@ -3443,6 +3517,22 @@ $('chat-form').onsubmit = async e=>{
         .ofc-chat-link{display:inline-block;margin-left:10px;font-size:13px;font-weight:600;
           color:#4aa8ff;text-decoration:none;border:1px solid #4aa8ff;border-radius:20px;
           padding:4px 14px;}
+        /* (b) Pattern v2.6: vien mau trang thai + loi thoai + dai trang thai + empty + Don gian */
+        .ofc-hero.busy,.ofc-desk.busy{border-left:4px solid #22c55e;}
+        .ofc-hero.ready,.ofc-desk.ready{border-left:4px solid #f59e0b;}
+        .ofc-hero.error,.ofc-desk.error{border-left:4px solid #ef4444;}
+        .ofc-speech{font-size:11px;color:#c4d4e8;font-style:italic;margin-top:4px;}
+        .ofc-pend{font-size:11px;color:#fbbf24;font-weight:700;margin-top:2px;}
+        .ofc-vp-strip{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted);
+          background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;
+          padding:8px 12px;margin-bottom:12px;}
+        .ofc-vp-strip b{color:var(--text);}
+        .ofc-empty{color:var(--muted);font-size:12px;line-height:1.5;margin-bottom:12px;}
+        .ofc-empty b{color:var(--text);}
+        body.ofc-simple .ofc-org,body.ofc-simple .ofc-ec-row,
+        body.ofc-simple .ofc-table,body.ofc-simple .ofc-dept,
+        body.ofc-simple .ofc-hide-simple{display:none !important;}
+        body.ofc-simple .ofc-hero-row{grid-template-columns:repeat(3,1fr);}
         @keyframes ofc-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
         @keyframes ofc-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(1.08)}}
         @keyframes ofc-bounce{0%,100%{transform:translateY(0)}30%{transform:translateY(-14px)}60%{transform:translateY(0)}80%{transform:translateY(-6px)}}
@@ -3615,18 +3705,24 @@ loadH();
                 f"({len(pending_approvals)})</div>"
                 f"<div class='ofc-appr'>{appr_items}</div>")
         else:
-            appr_html = ""
+            appr_html = (
+                "<div class='ofc-empty'>Chưa có việc đang chờ.<br>"
+                "<b>Làm gì tiếp:</b> giao việc mới ở <b>/new</b> để vòng "
+                "chat có chủ đề bàn.</div>")
         body = (f"<style>{css}</style>"
                 f"{sticky_html}"
                 f"<h1>🏢 Văn Phòng AI <span class='ofc-live'>● LIVE</span>"
-                f"<a class='ofc-chat-link' href='/chat'>💬 Vào Chat AI</a></h1>"
+                f"<a class='ofc-chat-link' href='/chat'>💬 Vào Chat AI</a>"
+                f"<button id='ofc-simple-toggle' class='ofc-chat-link' "
+                f"style='background:none;cursor:pointer'>📋 Đơn giản</button></h1>"
                 f"<p class='muted'>5 nhân vật AI thật của Orchestra · mỗi người 1 tính cách + nhiệm vụ · "
                 f"bấm vào nhân vật để nhắn tin · tự refresh 30s</p>"
+                f"{vp_strip2}"
                 f"<div class='ofc-strip'>{strip}</div>"
                 f"{company_html}"
                 f"{appr_html}"
                 f"<div class='ofc-hero-row'>{heroes}</div>"
-                f"<div class='ofc-sec-title'>🏛️ Sơ đồ tổ chức</div>"
+                f"<div class='ofc-sec-title ofc-hide-simple'>🏛️ Sơ đồ tổ chức</div>"
                 f"<div class='ofc-org'>"
                 f"<div class='ofc-org-top'><div class='ofc-org-char big'>👑</div>"
                 f"<div class='ofc-org-name'>Anh Thống</div>"
@@ -3641,7 +3737,7 @@ loadH();
                 f"{flow_html}"
                 f"{ec_section}"
                 f"<div class='ofc-metrics' style='grid-template-columns:repeat(3,1fr)'>{disk_html}</div>"
-                f"<div class='ofc-sec-title'>🎟️ Token chi tiết theo AI</div>"
+                f"<div class='ofc-sec-title ofc-hide-simple'>🎟️ Token chi tiết theo AI</div>"
                 f"{tok_table}"
                 f"{kb_html}"
                 f"{''.join(sections)}"
@@ -3662,7 +3758,14 @@ loadH();
                 f"var d=await r.json();"
                 f"if(d.ok){{btn.textContent='✅ Đã duyệt';btn.disabled=true;location.reload();}}"
                 f"else{{btn.textContent='❌ Lỗi';}}}}catch(e){{btn.textContent='❌ Lỗi';}}"
-                f"}};}});</script>"
+                f"}};}});"
+                f"(function(){{var b=document.getElementById('ofc-simple-toggle');"
+                f"if(!b)return;function setS(on){{document.body.classList.toggle('ofc-simple',!!on);"
+                f"b.textContent=on?'🌐 Đầy đủ':'📋 Đơn giản';"
+                f"try{{localStorage.setItem('ofc-view',on?'simple':'full');}}catch(e){{}}}}"
+                f"var s=null;try{{s=localStorage.getItem('ofc-view');}}catch(e){{}}"
+                f"if(s==='simple')setS(true);"
+                f"b.onclick=function(){{setS(!document.body.classList.contains('ofc-simple'));}};}})();</script>"
                 f"{bubble_js}")
         self._send(page("Văn Phòng AI", body, active="/ai-office", user=user))
 

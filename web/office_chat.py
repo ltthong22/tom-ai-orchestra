@@ -161,9 +161,15 @@ def get_vp_summary():
     except Exception:
         pending_count = 0
         _titles = []
+    try:
+        pending_by_agent = _pending_by_agent()
+    except Exception:
+        pending_by_agent = {}
     return {"vp_topic": topic,
             "vp_speakers": speakers,
             "vp_pending_count": pending_count,
+            "vp_pending_by_agent": pending_by_agent,
+            "vp_pending_has_agent": bool(pending_by_agent),
             "vp_pending_titles": _titles[:20],
             "vp_last_round": last_round,
             "vp_last_error": _short(_last_error, 120) if _last_error else "",
@@ -219,6 +225,40 @@ def _pending_titles():
             title = base.replace("-", " ").replace("_", " ")
         titles.append(_short(title, 90))
     return len(files), titles
+
+
+def _pending_by_agent():
+    """Dem viec cho theo agent CHI KHI item pending co truong gan agent that.
+
+    Chi nhan cac truong gan ro rang: agent/owner/assignee/assigned_to/
+    assigned_agent/agent_name/phu_trach/nguoi_phu_trach (chuoi khac rong).
+    KHONG dung from/to: do la luong gui-nhan cua task-bus (vd main,
+    ec-monitor, ky-thuat-luu-tru), khong phai agent Orchestra (Gemini/Muse/
+    DeepSeek/LM Studio) — gan from/to len the agent se la phan bo bia.
+    Hien tai khong item nao co cac truong tren -> tra {} (tong van giu
+    nguyen o vp_pending_count, khong bia phan bo)."""
+    counts = {}
+    try:
+        files = sorted(glob.glob(os.path.join(TASK_BUS_PENDING, "*.json")))
+    except Exception:
+        return counts
+    assign_keys = ("agent", "owner", "assignee", "assigned_to",
+                   "assigned_agent", "agent_name", "phu_trach",
+                   "nguoi_phu_trach")
+    for p in files:
+        try:
+            with open(p, encoding="utf-8") as f:
+                d = json.load(f)
+        except Exception:
+            continue
+        if not isinstance(d, dict):
+            continue
+        for k in assign_keys:
+            v = d.get(k)
+            if isinstance(v, str) and v.strip():
+                counts[v.strip()] = counts.get(v.strip(), 0) + 1
+                break
+    return counts
 
 
 def _pending_window(titles):
