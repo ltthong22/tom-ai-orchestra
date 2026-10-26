@@ -8,7 +8,7 @@ Chạy: python3 web/app.py  ->  http://localhost:8099
 # Version hien thi tren giao dien — TANG MOI LAN SHIP BAN MOI.
 # Quy tac 26/10/2026 (anh chot): moi thu tao ra deu phai hien version + ngay
 # de phan biet ban cu/moi.
-ORCHESTRA_VERSION = "2.4"
+ORCHESTRA_VERSION = "2.5"
 ORCHESTRA_VERSION_DATE = "26/10/2026"
 import html
 import json
@@ -1606,6 +1606,42 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
         for _a in agents:
             if _a["key"] == "deepseek":
                 _a["prepaid"] = True
+        # --- Hiển thị VP Sống (CHỈ ĐỌC, không đổi luật) ---
+        # Loi thoai + trang thai hien thi suy ra tu du lieu that san co:
+        # router in_flight/provider health (status), feed vong chat (speakers/topic),
+        # so file task-bus pending (viec cho anh duyet, chi dem, khong doi trang thai file).
+        # Khong doi vong chat, task-bus, dashboard hay provider nao.
+        vp = {"vp_topic": "", "vp_speakers": [], "vp_pending_count": 0,
+              "vp_last_round": 0, "vp_last_error": "", "vp_loop_started": False}
+        try:
+            import office_chat as _oc
+            vp = _oc.get_vp_summary()
+        except Exception:
+            pass
+        _disp = {"busy": "running", "ready": "waiting",
+                 "stale": "resting", "error": "error"}
+        _speakers = vp.get("vp_speakers") or []
+        _topic = vp.get("vp_topic") or ""
+        _pend = vp.get("vp_pending_count") or 0
+        for _a in agents:
+            _a["display_status"] = _disp.get(_a["status"], "resting")
+            _st, _key, _nm = _a["status"], _a["key"], _a["name"]
+            if _st == "error":
+                _a["speech"] = "Gặp sự cố — kiểm tra provider"
+            elif _st == "busy":
+                _a["speech"] = "Đang chạy task"
+            elif _st == "stale":
+                _a["speech"] = "Nghỉ"
+            elif _key in ("muse", "muse_main") and _pend > 0:
+                _a["speech"] = "Chờ anh duyệt: %d việc đang chờ" % _pend
+            elif _nm in _speakers and _topic:
+                _a["speech"] = "Đang bàn: " + _topic
+            elif _nm in _speakers:
+                _a["speech"] = "Đang bàn trong vòng chat mới nhất"
+            elif _key in ("gemini", "deepseek"):
+                _a["speech"] = "Nghỉ — chờ vòng chat sau"
+            else:
+                _a["speech"] = "Sẵn sàng — chờ việc mới"
         fin = {}
         try:
             from data_providers.finance_data import fetch_dashboard, is_configured
@@ -1640,7 +1676,7 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
         avg_ok = (round(sum(a["ok_rate"] for a in agents) / len(agents), 1)
                   if agents else 100.0)
         return {"agents": agents, "finance": fin, "ec": ec,
-                "drives": drives,
+                "drives": drives, "vp": vp,
                 "company": {"reputation": rep, "avg_ok": avg_ok}}
 
     def _api_office3d_state(self):
@@ -1674,6 +1710,7 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
             init = q.get("init", ["0"])[0] == "1"
             data = office_chat.get_messages(since=since, init=init)
             data.update(office_chat.get_status())
+            data.update(office_chat.get_vp_summary())
             body = _json.dumps(data, ensure_ascii=False).encode()
             self._send(body, 200, "application/json; charset=utf-8")
         except Exception as e:
@@ -1742,6 +1779,38 @@ html,body{height:100%;overflow:hidden;background:#070b12;color:#e8eef5;
 .vp-live-msg b{color:#4aa8ff}
 .vp-live-msg.sys{border-color:#16a34a}
 .vp-live-msg.sys b{color:#4ade80}
+/* ---- VP Song v2.5: chi hien thi, khong doi luat ---- */
+.vp-strip{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:#9fb2c8;
+ background:rgba(11,18,32,.7);border:1px solid #223148;border-radius:10px;padding:7px 10px;margin-bottom:8px}
+.vp-strip b{color:#fff}
+.agent-row{border-left:4px solid #475569;border-radius:6px;padding-left:8px}
+.agent-row.br-running{border-left-color:#22c55e}
+.agent-row.br-waiting{border-left-color:#f59e0b}
+.agent-row.br-error{border-left-color:#ef4444}
+.agent-row.br-resting{border-left-color:#64748b}
+.agent-speech{color:#c4d4e8;font-style:italic}
+.vp-empty{color:#9fb2c8;font-size:12px;line-height:1.5}
+.vp-empty b{color:#e8eef5}
+#vp-flow{display:flex;gap:6px;align-items:stretch;flex-wrap:wrap;font-size:12px;margin-top:8px}
+.flow-step{flex:1;min-width:120px;background:rgba(11,18,32,.7);border:1px solid #223148;
+ border-radius:10px;padding:7px 9px}
+.flow-step b{display:block;color:#fff;margin-bottom:2px}
+.flow-step span{color:#9fb2c8}
+.flow-arrow{align-self:center;color:#4aa8ff;font-weight:700;font-size:16px}
+#vp-view-toggle{color:#7cc4ff;text-decoration:none;font-size:12px;cursor:pointer;
+ border:1px solid #2a3d5c;border-radius:16px;padding:4px 12px;background:rgba(20,32,52,.7)}
+#simple-view{display:none;position:fixed;inset:0;left:56px;overflow-y:auto;
+ padding:16px;z-index:9;background:#070b12}
+#simple-view .sv-card{background:rgba(13,20,32,.9);border:1px solid #223148;border-radius:12px;
+ padding:12px 14px;margin-bottom:12px}
+#simple-view h2{font-size:15px;margin-bottom:8px}
+#simple-view .sv-row{display:flex;gap:10px;align-items:center;padding:8px 4px;
+ border-bottom:1px solid #1a2636;font-size:13px}
+#simple-view .sv-row:last-child{border-bottom:none}
+body.simple-view{overflow:auto;height:auto}
+body.simple-view #scene,body.simple-view .hud{display:none !important}
+body.simple-view #simple-view{display:block}
+body.simple-view #hud-top{display:none !important}
 .pbar{background:#0b1220;border-radius:8px;height:10px;overflow:hidden;margin-top:6px}
 .pfill{height:100%;border-radius:8px;transition:width .6s}
 .pmeta{font-size:11px;color:#7c8da3;margin-top:4px}
@@ -1901,6 +1970,7 @@ html,body{height:100%;overflow:hidden;background:#070b12;color:#e8eef5;
 <div class="hud" id="hud-top"><div class="card" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;width:100%">
  <span class="title">🌐 Văn Phòng AI 3D</span>
  <span style="font-size:12px;color:#7cc4ff;border:1px solid #2a3d5c;border-radius:12px;padding:2px 10px">v__VERSION__ · __VERSION_DATE__</span>
+ <button id="vp-view-toggle" title="Chuyển sang dạng danh sách khô, không cần bản đồ 3D">📋 Đơn giản</button>
  <span class="stats" id="company-stats"></span>
  <span id="ec-strip"></span>
 </div></div>
@@ -1918,8 +1988,19 @@ html,body{height:100%;overflow:hidden;background:#070b12;color:#e8eef5;
  <div class="sec-t">💾 Tác vụ chuyển dữ liệu ổ cứng <span style="opacity:.6;font-weight:400">(Kỹ thuật · Dữ liệu)</span></div>
  <div id="ec-steps"></div>
  <div class="sec-t">🔴 VP Sống · Trực tiếp <span style="opacity:.6;font-weight:400">(vòng chat tự động mỗi giờ)</span> <span id="vp-live-status" style="text-transform:none;letter-spacing:0;color:#7cc4ff"></span></div>
+ <div id="vp-status-strip" class="vp-strip"></div>
  <div id="vp-live-box"></div>
+ <div class="sec-t">🧭 Luồng xử lý vòng chat <span style="opacity:.6;font-weight:400">(theo thứ tự bước — chỉ hiển thị, không đổi cách vòng chạy)</span></div>
+ <div id="vp-flow"></div>
 </div></div>
+
+<div id="simple-view">
+ <div class="sv-card"><h2>📋 Văn phòng — dạng Đơn giản <button id="sv-back" style="float:right;background:#2563eb;color:#fff;border:none;border-radius:8px;padding:6px 12px;cursor:pointer">🌐 Về bản đồ 3D</button></h2>
+ <p class="vp-empty">Chế độ xem danh sách khô thay cho bản đồ 3D. Lựa chọn được lưu trên trình duyệt này; mặc định vẫn là bản đồ 3D.</p></div>
+ <div class="sv-card"><h2>🤖 Nhân sự</h2><div id="sv-agents"></div></div>
+ <div class="sv-card"><h2>🔴 VP Sống · Trực tiếp</h2><div id="sv-strip" class="vp-strip"></div><div id="sv-live"></div><div id="sv-flow"></div></div>
+ <div class="sv-card"><h2>💰 Tài chính · 💽 Ổ cứng</h2><div id="sv-fin"></div></div>
+</div>
 
 <button id="chat-bubble" title="Chat với AI">💬</button>
 <div id="chat-panel">
@@ -2240,36 +2321,43 @@ function renderPanels(){
     const txt = s.status==='done'?'✅ '+s.id : s.status==='run'?'🔄 '+s.id+'…':'⏳ '+s.id;
     return '<span class="ec-mini '+cls+'">'+txt+'</span>';
   }).join('');
-  // agents
-  $('agent-list').innerHTML = S.agents.map(a=>{
+  // agents (vien mau trang thai + loi thoai ngan duoi ten; chi hien thi)
+  $('agent-list').innerHTML = S.agents.length ? S.agents.map(a=>{
     const t = ST_TXT[a.status]||ST_TXT.stale;
     const t1=a.tokens[1]||{}, t7=a.tokens[7]||{}, t30=a.tokens[30]||{};
     const cost30 = t30.cost ? ' · 💵$'+t30.cost : '';
     const refill = a.key==='muse_main' ? ' <span class="st st-ready">🔄 refill tuần</span>' : '';
     const prepaid = a.prepaid ? '<br><span class="tok">💰 Prepaid (không refill)</span>' : '';
-    return '<div class="agent-row"><span class="agent-dot" style="background:'+a.color+'"></span>'+
-     '<span><span class="an">'+a.char+' '+a.name+'</span>'+refill+'<br><span class="tok">🎟️ 1d:'+fmtT(t1.tokens)+
+    const br = 'br-'+(a.display_status||'resting');
+    const speech = a.speech ? '<br><span class="agent-speech">💬 “'+a.speech+'”</span>' : '';
+    return '<div class="agent-row '+br+'"><span class="agent-dot" style="background:'+a.color+'"></span>'+
+     '<span><span class="an">'+a.char+' '+a.name+'</span>'+refill+speech+'<br><span class="tok">🎟️ 1d:'+fmtT(t1.tokens)+
      ' · 7d:'+fmtT(t7.tokens)+' · 30d:'+fmtT(t30.tokens)+cost30+'</span>'+prepaid+'</span>'+
      '<span class="st '+t[1]+'">'+t[0]+'</span></div>';
-  }).join('');
+  }).join('')
+  : '<div class="vp-empty">Chưa có agent nào.<br><b>Làm gì tiếp:</b> kiểm tra cấu hình provider rồi tải lại trang — danh sách agent lấy từ router/provider, không nhập tay.</div>';
+  // dai trang thai header khoi VP Song (so lieu that tu STATE)
+  renderVpStrip(S);
+  renderVpFlow(S);
   // finance
   const F = S.finance, keys = Object.keys(F);
   $('finance-box').innerHTML = keys.length ? keys.slice(0,6).map(k=>
     '<div class="fin-row"><span>'+k+'</span><span class="v">'+F[k]+'</span></div>').join('')
-    : '<div class="fin-row"><span>⏳</span><span class="v">đang tải…</span></div>';
+    : '<div class="vp-empty">Chưa có dữ liệu tài chính.<br><b>Làm gì tiếp:</b> bấm nút 🔄 Đồng bộ trên thanh icon trái, rồi tải lại trang.</div>';
   // drives
   const D = S.drives;
   $('drive-box').innerHTML = ['G','H','J'].map(d=>{
     const i = D[d];
-    if(!i) return '<div class="fin-row"><span>💽 Ổ '+d+'</span><span class="v">⏳</span></div>';
+    if(!i) return '<div class="fin-row"><span>💽 Ổ '+d+'</span><span class="v">⏳ chưa có số liệu</span></div>';
     const col = i.pct>=95?'#ef4444':i.pct>=85?'#f59e0b':'#22c55e';
     return '<div><div class="fin-row"><span>💽 Ổ '+d+'</span><span class="v">'+i.free.toFixed(0)+
      'GB trống</span></div><div class="dbar"><div style="width:'+i.pct+'%;background:'+col+'"></div></div></div>';
-  }).join('');
+  }).join('') + (['G','H','J'].every(d=>!D[d])
+    ? '<div class="vp-empty"><b>Làm gì tiếp:</b> số liệu ổ cứng do máy chủ cập nhật định kỳ — nếu trống lâu, kiểm tra lại máy chủ rồi tải lại trang.</div>' : '');
   // ec steps — tác vụ chuyển dữ liệu ổ cứng (thuộc Kỹ thuật/Dữ liệu); xong hết thì ẩn
   const ecAllDone = S.ec.length && S.ec.every(s=>s.status==='done' && s.pct>=100);
   document.getElementById('hud-bottom').style.display = ecAllDone ? 'none' : '';
-  $('ec-steps').innerHTML = S.ec.map(s=>{
+  $('ec-steps').innerHTML = S.ec.length ? S.ec.map(s=>{
     const cls = s.status==='done'?'#22c55e':s.status==='run'?'#f59e0b':'#475569';
     const bar = s.pct>=0
       ? '<div class="pbar"><div class="pfill" style="width:'+s.pct+'%;background:'+cls+'"></div></div>'+
@@ -2278,8 +2366,76 @@ function renderPanels(){
         '<div class="pmeta">'+s.detail+'</div>';
     return '<div class="ec-step"><div class="eid">'+s.char+' '+s.id+'</div>'+
      '<div class="enm">'+s.name+'<br>'+s.route+'</div>'+bar+'</div>';
-  }).join('');
+  }).join('')
+  : '<div class="vp-empty">Chưa có tác vụ chuyển dữ liệu nào.<br><b>Làm gì tiếp:</b> khi có đợt chuyển ổ cứng mới, tác vụ sẽ tự hiện ở đây — không cần tạo tay.</div>';
+  if(document.body.classList.contains('simple-view')) renderSimple();
 }
+
+// ---------- VP Song v2.5: dai trang thai + so do luong + dang Don gian (chi hien thi) ----------
+function vpCounts(S){
+  const c = {total:(S.agents||[]).length, running:0, waiting:0, resting:0, error:0};
+  (S.agents||[]).forEach(a=>{
+    const d = a.display_status || (a.status==='busy'?'running':a.status==='ready'?'waiting':a.status==='error'?'error':'resting');
+    if(c[d]!==undefined) c[d]++;
+  });
+  return c;
+}
+function renderVpStrip(S){
+  const el = $('vp-status-strip'); if(!el) return;
+  const c = vpCounts(S), vp = S.vp || {};
+  const pend = vp.vp_pending_count || 0;
+  const round = vp.vp_last_round || 0;
+  if(!c.total){
+    el.innerHTML = '<span class="vp-empty">Chưa có agent nào — danh sách sẽ hiện khi router/provider có số liệu.</span>';
+    return;
+  }
+  el.innerHTML = '👥 <b>'+c.total+' agent</b> · 🟢 <b>'+c.running+'</b> Đang chạy · '+
+    '🟠 <b>'+c.waiting+'</b> Chờ việc · ⚪ <b>'+c.resting+'</b> Đang nghỉ · '+
+    '🔴 <b>'+c.error+'</b> Gặp sự cố · ⏳ <b>'+pend+'</b> việc chờ anh duyệt'+
+    (round ? ' · 💬 Vòng '+round : '');
+  const sv = $('sv-strip'); if(sv) sv.innerHTML = el.innerHTML;
+}
+function renderVpFlow(S){
+  const el = $('vp-flow'); if(!el) return;
+  const vp = S.vp || {};
+  const sp = vp.vp_speakers || [];
+  const chat = sp.filter(n=>n!=='Hệ thống');
+  const topic = vp.vp_topic || '';
+  const pend = vp.vp_pending_count || 0;
+  const steps = [
+    ['1 · 📥 Lấy trạng thái thật', (pend? pend+' việc đang chờ' : 'chưa có việc đang chờ') + ' · council · goal'],
+    ['2 · 💬 Nêu ý', chat[0] ? chat[0] + (topic ? ' — “'+topic+'”' : '') : 'chờ agent nêu ý ở vòng tới'],
+    ['3 · 🔁 Phản biện', chat[1] ? chat[1] + ' phản biện / bổ sung' : 'chờ agent thứ hai phản biện'],
+    ['4 · 💾 Ghi vào feed', vp.vp_last_round ? 'đã ghi vòng '+vp.vp_last_round : 'chưa ghi vòng nào'],
+    ['5 · ✅ Chờ anh duyệt', pend ? pend+' việc đang chờ anh duyệt' : 'không còn việc chờ duyệt'],
+  ];
+  el.innerHTML = steps.map(s=>'<div class="flow-step"><b>'+s[0]+'</b><span>'+s[1]+'</span></div>').join('<span class="flow-arrow">→</span>') +
+    (!vp.vp_last_round ? '<div class="vp-empty" style="flex-basis:100%">Chưa có vòng chat nào — sơ đồ sẽ hiện tên agent thật khi vòng đầu tiên chạy xong. Vòng chat chạy tự động mỗi giờ, không cần bấm gì.</div>' : '') +
+    (!pend ? '<div class="vp-empty" style="flex-basis:100%">Chưa có việc đang chờ — giao việc mới ở <b>/new</b> để vòng chat có chủ đề bàn.</div>' : '');
+}
+function renderSimple(){
+  const ag = $('sv-agents'), lv = $('sv-live'), fl = $('sv-flow'), fn = $('sv-fin');
+  if(ag) ag.innerHTML = $('agent-list') ? $('agent-list').innerHTML : '';
+  if(lv) lv.innerHTML = $('vp-live-box') ? $('vp-live-box').innerHTML : '';
+  if(fl) fl.innerHTML = $('vp-flow') ? $('vp-flow').innerHTML : '';
+  if(fn) fn.innerHTML = ($('finance-box') ? $('finance-box').innerHTML : '') + ($('drive-box') ? $('drive-box').innerHTML : '');
+}
+function setSimpleView(on){
+  document.body.classList.toggle('simple-view', !!on);
+  try{ localStorage.setItem('vp3d-view', on ? 'simple' : '3d'); }catch(e){}
+  const btn = $('vp-view-toggle');
+  if(btn) btn.textContent = on ? '🌐 Bản đồ 3D' : '📋 Đơn giản';
+  if(on) renderSimple();
+}
+(function(){
+  let saved = null;
+  try{ saved = localStorage.getItem('vp3d-view'); }catch(e){}
+  const btn = $('vp-view-toggle');
+  if(btn) btn.onclick = ()=>setSimpleView(!document.body.classList.contains('simple-view'));
+  const back = $('sv-back');
+  if(back) back.onclick = ()=>setSimpleView(false);
+  if(saved === 'simple') setSimpleView(true);
+})();
 renderPanels();
 
 // ---------- data refresh ----------
@@ -2463,12 +2619,13 @@ $('chat-form').onsubmit = async e=>{
       var r=await fetch('/api/office-chat?since='+(first?0:lastId));
       var d=await r.json();
       setStatus(d);
-      if(first && !d.messages.length){ box.innerHTML='<div class="muted">⏳ '+emptyReason(d)+'</div>'; return; }
+      if(first && !d.messages.length){ box.innerHTML='<div class="vp-empty">⏳ '+emptyReason(d)+'<br><b>Làm gì tiếp:</b> vòng chat chạy tự động mỗi giờ — tin đầu tiên sẽ hiện ở đây, không cần bấm gì. Nếu sau 1 giờ vẫn trống, kiểm tra vòng chat trên máy chủ rồi tải lại trang.</div>'; if(document.body.classList.contains('simple-view')) renderSimple(); return; }
       if(first) box.innerHTML='';
       d.messages.forEach(function(m){
         if(seen[m.id]) return; seen[m.id]=1; addMsg(m);
         if(m.id>lastId) lastId=m.id;
       });
+      if(document.body.classList.contains('simple-view')) renderSimple();
     }catch(e){}
   }
   poll(true); setInterval(function(){poll(false);},30000);

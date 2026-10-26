@@ -127,6 +127,47 @@ def get_status():
             "last_error": _short(_last_error, 120) if _last_error else ""}
 
 
+def get_vp_summary():
+    """Tom tat VP Song tu du lieu that: chu de + nguoi noi vong moi nhat + viec cho duyet.
+
+    Dung cho dai trang thai header, loi thoai agent va so do luong — khong hardcode.
+    Feed rong / khong co file pending -> tra chuoi rong / 0, frontend hien empty-state."""
+    feed = _read_feed()
+    last_round = feed.get("last_round", 0)
+    msgs = [m for m in feed.get("messages", [])
+            if m.get("round") == last_round] if last_round else []
+    speakers = []
+    topic = ""
+    for m in msgs:
+        ag = m.get("agent", "")
+        if ag and ag not in speakers:
+            speakers.append(ag)
+        if ag == "Hệ thống":
+            t = (m.get("text") or "")
+            for pref in ("🔄 Vòng chat tự động #%d — chủ đề từ trạng thái thật: " % last_round,
+                         "💡 Chủ đề do "):
+                if t.startswith(pref):
+                    t = t[len(pref):]
+                    break
+            # Chu de tu de xuat co dang "X tu de xuat: <chu de> — <ly do>" -> giu phan chu de.
+            if " tự đề xuất: " in t:
+                t = t.split(" tự đề xuất: ", 1)[1]
+            # Chu de tu de xuat co dang "X: <chu de> — <ly do>"; giu phan chu de.
+            topic = _short(t.split(" — ")[0], 90)
+    if not topic and msgs:
+        topic = _short(msgs[0].get("text", ""), 90)
+    try:
+        pending_count, _titles = _pending_titles()
+    except Exception:
+        pending_count = 0
+    return {"vp_topic": topic,
+            "vp_speakers": speakers,
+            "vp_pending_count": pending_count,
+            "vp_last_round": last_round,
+            "vp_last_error": _short(_last_error, 120) if _last_error else "",
+            "vp_loop_started": _started}
+
+
 def get_messages(since=0, init=False):
     """Feed cho endpoint /api/office-chat. init=1 chi tra latest_id (trang lay moc, khong dump lich su)."""
     feed = _read_feed()
