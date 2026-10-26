@@ -8,7 +8,7 @@ Chạy: python3 web/app.py  ->  http://localhost:8099
 # Version hien thi tren giao dien — TANG MOI LAN SHIP BAN MOI.
 # Quy tac 26/10/2026 (anh chot): moi thu tao ra deu phai hien version + ngay
 # de phan biet ban cu/moi.
-ORCHESTRA_VERSION = "2.5"
+ORCHESTRA_VERSION = "2.6"
 ORCHESTRA_VERSION_DATE = "26/10/2026"
 import html
 import json
@@ -1612,6 +1612,7 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
         # so file task-bus pending (viec cho anh duyet, chi dem, khong doi trang thai file).
         # Khong doi vong chat, task-bus, dashboard hay provider nao.
         vp = {"vp_topic": "", "vp_speakers": [], "vp_pending_count": 0,
+              "vp_pending_titles": [],
               "vp_last_round": 0, "vp_last_error": "", "vp_loop_started": False}
         try:
             import office_chat as _oc
@@ -1735,7 +1736,7 @@ html,body{height:100%;overflow:hidden;background:#070b12;color:#e8eef5;
 #scene{position:fixed;inset:0}
 #scene canvas{display:block}
 .hud{position:fixed;z-index:10;pointer-events:none}
-.hud .card{pointer-events:auto;background:rgba(13,20,32,.82);border:1px solid #223148;
+.hud .card{pointer-events:auto;background:rgba(13,20,32,.82);border:1px solid rgba(120,160,220,.22);
  border-radius:12px;padding:10px 12px;backdrop-filter:blur(8px);
  box-shadow:0 4px 18px rgba(0,0,0,.45)}
 #hud-top{top:10px;left:10px;right:10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
@@ -1752,16 +1753,17 @@ html,body{height:100%;overflow:hidden;background:#070b12;color:#e8eef5;
 #hud-left{top:76px;left:66px;width:228px;max-height:calc(100vh - 280px);overflow-y:auto}
 #hud-right{top:76px;right:10px;width:228px;max-height:calc(100vh - 280px);overflow-y:auto}
 #hud-bottom{bottom:10px;left:10px;right:78px}
-.sec-t{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#7c8da3;
+.sec-t{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#a8b8cc;
  margin:8px 0 6px;font-weight:700}
 .sec-t:first-child{margin-top:0}
 .agent-row{display:flex;align-items:center;gap:8px;padding:6px 4px;
- border-bottom:1px solid #1a2636;font-size:12px}
+ border-bottom:1px solid rgba(148,163,184,.14);font-size:12px;cursor:pointer}
+.agent-row.selected{background:rgba(74,168,255,.16);border-radius:10px}
 .agent-row:last-child{border-bottom:none}
 .agent-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 .agent-row .an{font-weight:700;white-space:nowrap}
 .agent-row .st{margin-left:auto;font-size:11px;white-space:nowrap}
-.tok{color:#7c8da3;font-size:11px;margin-top:2px}
+.tok{color:#a8b8cc;font-size:12px;margin-top:2px}
 .st-busy{color:#fbbf24}.st-ready{color:#4ade80}.st-stale{color:#64748b}.st-error{color:#f87171}
 .fin-row{display:flex;justify-content:space-between;font-size:12px;padding:3px 0;
  border-bottom:1px solid #16202f}
@@ -1775,7 +1777,8 @@ html,body{height:100%;overflow:hidden;background:#070b12;color:#e8eef5;
 .ec-step .eid{font-weight:700;font-size:12px}
 .ec-step .enm{font-size:11px;color:#9fb2c8;margin:2px 0}
 #vp-live-box{max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;font-size:12px}
-.vp-live-msg{background:rgba(13,20,32,.82);border:1px solid #223148;border-radius:10px;padding:6px 10px}
+.vp-live-msg{background:rgba(13,20,32,.82);border:1px solid rgba(120,160,220,.22);border-radius:10px;padding:6px 10px}
+.vp-live-msg.vp-grouped{margin-top:-4px;border-top-left-radius:6px;border-top-right-radius:6px}
 .vp-live-msg b{color:#4aa8ff}
 .vp-live-msg.sys{border-color:#16a34a}
 .vp-live-msg.sys b{color:#4ade80}
@@ -1811,9 +1814,47 @@ body.simple-view{overflow:auto;height:auto}
 body.simple-view #scene,body.simple-view .hud{display:none !important}
 body.simple-view #simple-view{display:block}
 body.simple-view #hud-top{display:none !important}
+/* ---- v2.6 Liquid Glass (chi hien thi): 3 cot + search/tab + chon mem + hover-action + badge/nhan + divider pill + link card ---- */
+.sv-search{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(120,160,220,.25);
+ border-radius:20px;color:#fff;padding:8px 14px;font-size:13px;margin:6px 0;backdrop-filter:blur(8px)}
+.sv-search::placeholder{color:#a8b8cc}
+.sv-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 8px}
+.sv-tabs button{background:rgba(255,255,255,.06);border:1px solid rgba(120,160,220,.22);
+ color:#c4d4e8;border-radius:16px;padding:4px 11px;font-size:12px;cursor:pointer}
+.sv-tabs button.on{background:rgba(74,168,255,.28);border-color:#4aa8ff;color:#fff;font-weight:700}
+.row-action{opacity:0;margin-left:auto;flex-shrink:0;background:rgba(74,168,255,.2);
+ border:1px solid rgba(74,168,255,.5);color:#fff;border-radius:14px;padding:3px 10px;
+ font-size:12px;cursor:pointer;transition:opacity .15s;white-space:nowrap}
+.agent-row:hover .row-action,.task-row:hover .row-action,
+.agent-row:focus-within .row-action,.task-row:focus-within .row-action{opacity:1}
+@media(hover:none){.row-action{opacity:1}}
+.sv-row.selected,.task-row.selected{background:rgba(74,168,255,.16);border-radius:10px}
+.task-row{display:flex;gap:10px;align-items:center;padding:8px 4px;
+ border-bottom:1px solid rgba(148,163,184,.14);font-size:13px;cursor:pointer}
+.unread-badge{display:inline-block;background:#ef4444;color:#fff;border-radius:12px;
+ padding:1px 9px;font-size:12px;font-weight:700;min-width:22px;text-align:center;vertical-align:middle}
+.cls-pill{font-size:12px;font-weight:700;padding:2px 9px;border-radius:12px;white-space:nowrap;flex-shrink:0}
+.cls-wait{background:#92400e;color:#fef3c7}.cls-run{background:#14532d;color:#dcfce7}
+.cls-err{background:#991b1b;color:#fecaca}.cls-rest{background:#334155;color:#e2e8f0}
+.cls-chat{background:#1e3a5f;color:#bfdbfe}
+.vp-date-pill{align-self:center;background:rgba(30,41,59,.92);
+ border:1px solid rgba(120,160,220,.25);border-radius:16px;padding:3px 14px;
+ font-size:12px;color:#e2e8f0;margin:6px 0 2px}
+.vp-sender{display:inline-block;background:rgba(74,168,255,.18);color:#bfdbfe;
+ border-radius:10px;padding:1px 8px;font-size:11px;font-weight:700;margin-right:6px}
+.vp-time{display:none;font-size:11px;color:#a8b8cc;margin-left:6px}
+.vp-live-msg:hover .vp-time{display:inline}
+.vp-linkcard{display:inline-block;background:rgba(255,255,255,.08);
+ border:1px solid rgba(120,160,220,.3);border-radius:14px;padding:4px 10px;
+ color:#7cc4ff;text-decoration:none;font-size:12px;word-break:break-all}
+.vp-linkcard:hover{text-decoration:underline}
+body.simple-view #simple-view{display:grid;grid-template-columns:300px 300px 1fr;gap:12px;align-items:start}
+#simple-view .sv-head{grid-column:1/-1}
+@media(max-width:1100px){body.simple-view #simple-view{grid-template-columns:300px 1fr}}
+@media(max-width:700px){body.simple-view #simple-view{grid-template-columns:1fr}}
 .pbar{background:#0b1220;border-radius:8px;height:10px;overflow:hidden;margin-top:6px}
 .pfill{height:100%;border-radius:8px;transition:width .6s}
-.pmeta{font-size:11px;color:#7c8da3;margin-top:4px}
+.pmeta{font-size:12px;color:#a8b8cc;margin-top:4px}
 .stripes{background:repeating-linear-gradient(45deg,#b45309,#b45309 8px,#d97706 8px,#d97706 16px);
  animation:slide 1s linear infinite;background-size:28px 28px}
 @keyframes slide{to{background-position:28px 0}}
@@ -1833,7 +1874,7 @@ body.simple-view #hud-top{display:none !important}
 #chat-form input{flex:1;background:#0b1220;border:1px solid #2a3d5c;border-radius:8px;
  color:#fff;padding:8px;font-size:12px}
 #chat-form button{background:#4aa8ff;border:none;border-radius:8px;color:#fff;
- padding:0 14px;cursor:pointer;font-size:14px}
+ padding:0 16px;cursor:pointer;font-size:16px}
 #chat-agent{width:100%;background:#0b1220;color:#fff;border:none;border-bottom:1px solid #223148;
  padding:8px;font-size:12px}
 #settings-btn{position:fixed;top:76px;right:248px;z-index:30;width:40px;height:40px;
@@ -1976,7 +2017,10 @@ body.simple-view #hud-top{display:none !important}
 </div></div>
 
 <div class="hud" id="hud-left"><div class="card">
- <div class="sec-t">🤖 Nhân sự · Token</div><div id="agent-list"></div>
+ <div class="sec-t">🤖 Nhân sự · Token</div>
+ <input id="agent-search" class="sv-search" placeholder="🔍 Tìm agent…" autocomplete="off">
+ <div class="sv-tabs" id="agent-tabs"><button data-f="all" class="on">Tất cả</button><button data-f="running">Đang chạy</button><button data-f="waiting">Chờ việc</button><button data-f="resting">Nghỉ</button><button data-f="error">Lỗi</button></div>
+ <div id="agent-list"></div>
 </div></div>
 
 <div class="hud" id="hud-right"><div class="card">
@@ -1987,7 +2031,7 @@ body.simple-view #hud-top{display:none !important}
 <div class="hud" id="hud-bottom"><div class="card">
  <div class="sec-t">💾 Tác vụ chuyển dữ liệu ổ cứng <span style="opacity:.6;font-weight:400">(Kỹ thuật · Dữ liệu)</span></div>
  <div id="ec-steps"></div>
- <div class="sec-t">🔴 VP Sống · Trực tiếp <span style="opacity:.6;font-weight:400">(vòng chat tự động mỗi giờ)</span> <span id="vp-live-status" style="text-transform:none;letter-spacing:0;color:#7cc4ff"></span></div>
+ <div class="sec-t">🔴 VP Sống · Trực tiếp <span style="opacity:.6;font-weight:400">(vòng chat tự động mỗi giờ)</span> <span id="vp-live-status" style="text-transform:none;letter-spacing:0;color:#7cc4ff"></span> <span id="vp-unread" class="unread-badge" style="display:none" title="Tin mới — bấm vào khung chat để đánh dấu đã đọc"></span></div>
  <div id="vp-status-strip" class="vp-strip"></div>
  <div id="vp-live-box"></div>
  <div class="sec-t">🧭 Luồng xử lý vòng chat <span style="opacity:.6;font-weight:400">(theo thứ tự bước — chỉ hiển thị, không đổi cách vòng chạy)</span></div>
@@ -1995,11 +2039,18 @@ body.simple-view #hud-top{display:none !important}
 </div></div>
 
 <div id="simple-view">
- <div class="sv-card"><h2>📋 Văn phòng — dạng Đơn giản <button id="sv-back" style="float:right;background:#2563eb;color:#fff;border:none;border-radius:8px;padding:6px 12px;cursor:pointer">🌐 Về bản đồ 3D</button></h2>
- <p class="vp-empty">Chế độ xem danh sách khô thay cho bản đồ 3D. Lựa chọn được lưu trên trình duyệt này; mặc định vẫn là bản đồ 3D.</p></div>
- <div class="sv-card"><h2>🤖 Nhân sự</h2><div id="sv-agents"></div></div>
- <div class="sv-card"><h2>🔴 VP Sống · Trực tiếp</h2><div id="sv-strip" class="vp-strip"></div><div id="sv-live"></div><div id="sv-flow"></div></div>
- <div class="sv-card"><h2>💰 Tài chính · 💽 Ổ cứng</h2><div id="sv-fin"></div></div>
+ <div class="sv-card sv-head"><h2>📋 Văn phòng — dạng Đơn giản <button id="sv-back" style="float:right;background:#2563eb;color:#fff;border:none;border-radius:8px;padding:6px 12px;cursor:pointer">🌐 Về bản đồ 3D</button></h2>
+ <p class="vp-empty">Bố cục 3 cột + thanh icon dọc bên trái (icon rail sẵn có của trang). Lựa chọn được lưu trên trình duyệt này; mặc định vẫn là bản đồ 3D. Bấm vào một dòng để chọn (nền sáng + bo tròn); nút hành động chỉ hiện khi hover vào dòng.</p></div>
+ <div class="sv-card"><h2>🤖 Nhân sự</h2>
+ <input id="sv-agent-search" class="sv-search" placeholder="🔍 Tìm agent…" autocomplete="off">
+ <div class="sv-tabs" id="sv-agent-tabs"><button data-f="all" class="on">Tất cả</button><button data-f="running">Đang chạy</button><button data-f="waiting">Chờ việc</button><button data-f="resting">Nghỉ</button><button data-f="error">Lỗi</button></div>
+ <div id="sv-agents"></div></div>
+ <div class="sv-card"><h2>⏳ Việc chờ duyệt</h2>
+ <input id="sv-task-search" class="sv-search" placeholder="🔍 Tìm việc…" autocomplete="off">
+ <div class="sv-tabs" id="sv-task-tabs"><button data-f="all" class="on">Tất cả</button><button data-f="wait">Chờ duyệt</button></div>
+ <div id="sv-tasks"></div></div>
+ <div class="sv-card"><h2>🔴 VP Sống · Trực tiếp <span id="sv-unread" class="unread-badge" style="display:none"></span></h2><div id="sv-strip" class="vp-strip"></div><div id="sv-live"></div><div id="sv-flow"></div>
+ <h2 style="margin-top:12px">💰 Tài chính · 💽 Ổ cứng</h2><div id="sv-fin"></div></div>
 </div>
 
 <button id="chat-bubble" title="Chat với AI">💬</button>
@@ -2011,7 +2062,7 @@ body.simple-view #hud-top{display:none !important}
  </select>
  <div id="chat-msgs"></div>
  <form id="chat-form"><input id="chat-input" placeholder="Nhắn cho AI…" autocomplete="off">
- <button type="submit">➤</button></form>
+ <button type="submit" title="Gửi" aria-label="Gửi tin nhắn">➤</button></form>
 </div>
 
 <button id="settings-btn" title="Cài đặt">⚙️</button>
@@ -2330,12 +2381,37 @@ function renderPanels(){
     const prepaid = a.prepaid ? '<br><span class="tok">💰 Prepaid (không refill)</span>' : '';
     const br = 'br-'+(a.display_status||'resting');
     const speech = a.speech ? '<br><span class="agent-speech">💬 “'+a.speech+'”</span>' : '';
-    return '<div class="agent-row '+br+'"><span class="agent-dot" style="background:'+a.color+'"></span>'+
-     '<span><span class="an">'+a.char+' '+a.name+'</span>'+refill+speech+'<br><span class="tok">🎟️ 1d:'+fmtT(t1.tokens)+
+    // Nhan phan loai canh ten — chi phan anh trang thai DA CO (khong bia trang thai moi):
+    // muse/muse_main + co viec pending = "Cho duyet" (giong muc "cho sep duyet" o trang 2D);
+    // agent noi o vong moi nhat = "Dang ban"; con lai theo display_status.
+    const _pend = (S.vp||{}).vp_pending_count||0, _spk = (S.vp||{}).vp_speakers||[];
+    let _cls = ['Chờ việc','cls-wait'];
+    if(a.display_status==='error') _cls = ['Lỗi','cls-err'];
+    else if(a.display_status==='running') _cls = ['Đang chạy','cls-run'];
+    else if((a.key==='muse'||a.key==='muse_main')&&_pend>0) _cls = ['Chờ duyệt','cls-wait'];
+    else if(_spk.indexOf(a.name)>=0) _cls = ['Đang bàn','cls-chat'];
+    else if(a.display_status==='resting') _cls = ['Nghỉ','cls-rest'];
+    return '<div class="agent-row '+br+'" data-name="'+a.name.toLowerCase()+'" data-status="'+(a.display_status||'resting')+'"><span class="agent-dot" style="background:'+a.color+'"></span>'+
+     '<span><span class="an">'+a.char+' '+a.name+'</span> <span class="cls-pill '+_cls[1]+'">'+_cls[0]+'</span>'+refill+speech+'<br><span class="tok">🎟️ 1d:'+fmtT(t1.tokens)+
      ' · 7d:'+fmtT(t7.tokens)+' · 30d:'+fmtT(t30.tokens)+cost30+'</span>'+prepaid+'</span>'+
+     '<button class="row-action" title="Xem lời thoại của agent này">💬</button>'+
      '<span class="st '+t[1]+'">'+t[0]+'</span></div>';
   }).join('')
   : '<div class="vp-empty">Chưa có agent nào.<br><b>Làm gì tiếp:</b> kiểm tra cấu hình provider rồi tải lại trang — danh sách agent lấy từ router/provider, không nhập tay.</div>';
+  // chon dong (nen sang + bo tron, khong vien cung) + hover-action (toast loi thoai)
+  document.querySelectorAll('#agent-list .agent-row').forEach(function(row, idx){
+    row.onclick = function(){
+      document.querySelectorAll('#agent-list .agent-row').forEach(function(r){ r.classList.remove('selected'); });
+      row.classList.add('selected');
+    };
+    var btn = row.querySelector('.row-action');
+    if(btn) btn.onclick = function(e){
+      e.stopPropagation();
+      var ag = S.agents[idx];
+      if(ag) toast('💬 '+ag.char+' '+ag.name+': '+(ag.speech||''));
+    };
+  });
+  applyAgentFilter();
   // dai trang thai header khoi VP Song (so lieu that tu STATE)
   renderVpStrip(S);
   renderVpFlow(S);
@@ -2419,7 +2495,82 @@ function renderSimple(){
   if(lv) lv.innerHTML = $('vp-live-box') ? $('vp-live-box').innerHTML : '';
   if(fl) fl.innerHTML = $('vp-flow') ? $('vp-flow').innerHTML : '';
   if(fn) fn.innerHTML = ($('finance-box') ? $('finance-box').innerHTML : '') + ($('drive-box') ? $('drive-box').innerHTML : '');
+  // chon dong + hover-action tren ban sao agent (ban goc o HUD khong giu listener khi copy innerHTML)
+  if(ag) ag.querySelectorAll('.agent-row').forEach(function(row, idx){
+    row.onclick = function(){
+      ag.querySelectorAll('.agent-row').forEach(function(r){ r.classList.remove('selected'); });
+      row.classList.add('selected');
+    };
+    var btn = row.querySelector('.row-action');
+    if(btn) btn.onclick = function(e){
+      e.stopPropagation();
+      var a2 = STATE.agents[idx];
+      if(a2) toast('💬 '+a2.char+' '+a2.name+': '+(a2.speech||''));
+    };
+  });
+  // cot viec cho duyet: tieu de that tu task-bus pending (chi doc), nhan "Cho duyet" nhu trang 2D
+  const tk = $('sv-tasks');
+  if(tk){
+    const titles = ((STATE.vp||{}).vp_pending_titles||[]);
+    tk.innerHTML = titles.length ? titles.map(function(t){
+      return '<div class="task-row" data-name="'+escHtml(t).toLowerCase()+'" data-status="wait">'+
+       '<span class="cls-pill cls-wait">Chờ duyệt</span><span>'+escHtml(t)+'</span>'+
+       '<a class="row-action" href="/new" title="Mở trang giao việc">↗ Mở /new</a></div>';
+    }).join('')
+    : '<div class="vp-empty">Chưa có việc đang chờ.<br><b>Làm gì tiếp:</b> giao việc mới ở <b>/new</b> để vòng chat có chủ đề bàn.</div>';
+    tk.querySelectorAll('.task-row').forEach(function(row){
+      row.onclick = function(){
+        tk.querySelectorAll('.task-row').forEach(function(r){ r.classList.remove('selected'); });
+        row.classList.add('selected');
+      };
+    });
+  }
+  const su = $('sv-unread'), vu = $('vp-unread');
+  if(su && vu){ su.textContent = vu.textContent; su.style.display = vu.style.display; }
+  applySimpleAgentFilter();
+  applySimpleTaskFilter();
 }
+
+// ---------- v2.6 Liquid Glass: loc/tim client-side (chi hien thi, khong doi du lieu) ----------
+function escHtml(s){
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+let agentQ = '', agentF = 'all', svAgentQ = '', svAgentF = 'all', svTaskQ = '', svTaskF = 'all';
+function filterRows(container, q, f){
+  const el = document.getElementById(container); if(!el) return;
+  const rows = el.querySelectorAll('.agent-row, .task-row');
+  rows.forEach(function(r){
+    const nm = (r.getAttribute('data-name')||'').toLowerCase();
+    const st = r.getAttribute('data-status')||'';
+    const okQ = !q || nm.indexOf(q)>=0;
+    const okF = (f==='all') || (st===f);
+    r.style.display = (okQ && okF) ? '' : 'none';
+  });
+}
+function applyAgentFilter(){ filterRows('agent-list', agentQ, agentF); }
+function applySimpleAgentFilter(){ filterRows('sv-agents', svAgentQ, svAgentF); }
+function applySimpleTaskFilter(){ filterRows('sv-tasks', svTaskQ, svTaskF); }
+function bindTabs(tabId, onPick){
+  const wrap = document.getElementById(tabId); if(!wrap) return;
+  wrap.querySelectorAll('button').forEach(function(b){
+    b.onclick = function(){
+      wrap.querySelectorAll('button').forEach(function(x){ x.classList.remove('on'); });
+      b.classList.add('on');
+      onPick(b.getAttribute('data-f'));
+    };
+  });
+}
+(function(){
+  const s1 = document.getElementById('agent-search');
+  if(s1) s1.oninput = function(){ agentQ = s1.value.trim().toLowerCase(); applyAgentFilter(); };
+  bindTabs('agent-tabs', function(f){ agentF = f; applyAgentFilter(); });
+  const s2 = document.getElementById('sv-agent-search');
+  if(s2) s2.oninput = function(){ svAgentQ = s2.value.trim().toLowerCase(); applySimpleAgentFilter(); };
+  bindTabs('sv-agent-tabs', function(f){ svAgentF = f; applySimpleAgentFilter(); });
+  const s3 = document.getElementById('sv-task-search');
+  if(s3) s3.oninput = function(){ svTaskQ = s3.value.trim().toLowerCase(); applySimpleTaskFilter(); };
+  bindTabs('sv-task-tabs', function(f){ svTaskF = f; applySimpleTaskFilter(); });
+})();
 function setSimpleView(on){
   document.body.classList.toggle('simple-view', !!on);
   try{ localStorage.setItem('vp3d-view', on ? 'simple' : '3d'); }catch(e){}
@@ -2596,13 +2747,48 @@ $('chat-form').onsubmit = async e=>{
 // ---------- VP Sống · trực tiếp (gộp từ trang VP Sống cũ) ----------
 (function(){
   var box=document.getElementById('vp-live-box'); if(!box) return;
-  var seen={}, lastId=0;
+  var seen={}, lastId=0, lastDate='', lastAgent='';
+  // Badge "chua doc": chi luu client-side (localStorage), khong doi feed/server/luat doc.
+  var vpUnread=0, vpLastRead=null, firstPoll=true;
+  try{ var _lr = localStorage.getItem('vp-last-read-id'); vpLastRead = (_lr===null?null:parseInt(_lr,10)); }catch(e){}
+  function fmtDate(ts){ var d=new Date(ts); if(isNaN(d.getTime())) return '';
+    return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear(); }
+  function fmtTime(ts){ var d=new Date(ts); if(isNaN(d.getTime())) return '';
+    return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
+  function linkify(text){
+    var esc = escHtml(text);
+    var urlRe = new RegExp('https?://[^\\s<]+', 'g');
+    return esc.replace(urlRe, function(u){
+      var dom = (u.split('/')[2]||u);
+      return '<a class="vp-linkcard" target="_blank" rel="noopener" href="'+u.replace(/"/g,'&quot;')+'">🌐 '+escHtml(dom)+'</a>';
+    });
+  }
+  function updateUnreadBadge(){
+    var b=document.getElementById('vp-unread'); if(!b) return;
+    if(vpUnread>0){ b.textContent='🔴 '+vpUnread+' chưa đọc'; b.style.display='inline-block'; }
+    else b.style.display='none';
+    var sb=document.getElementById('sv-unread');
+    if(sb){ sb.textContent=b.textContent; sb.style.display=b.style.display; }
+  }
+  function markVpRead(){
+    if(lastId>0){ vpLastRead=lastId; try{ localStorage.setItem('vp-last-read-id', String(lastId)); }catch(e){} }
+    vpUnread=0; updateUnreadBadge();
+  }
+  box.onclick = markVpRead;
   function addMsg(m){
+    var ds=fmtDate(m.ts);
+    if(ds && ds!==lastDate){
+      lastDate=ds;
+      var dv=document.createElement('div'); dv.className='vp-date-pill'; dv.textContent='📅 '+ds;
+      box.appendChild(dv);
+    }
+    var grouped=(m.agent===lastAgent); lastAgent=m.agent;
     var d=document.createElement('div');
-    d.className='vp-live-msg'+(m.agent==='Hệ thống'?' sys':'');
-    var b=document.createElement('b'); b.textContent=(m.agent||'AI')+' ';
-    var s=document.createElement('span'); s.textContent=m.text||'';
-    d.appendChild(b); d.appendChild(s); box.appendChild(d);
+    d.className='vp-live-msg'+(m.agent==='Hệ thống'?' sys':'')+(grouped?' vp-grouped':'');
+    var b=document.createElement('b'); b.className='vp-sender'; b.textContent=m.agent||'AI';
+    var s=document.createElement('span'); s.innerHTML=linkify(m.text||'');
+    var tm=document.createElement('span'); tm.className='vp-time'; tm.textContent=fmtTime(m.ts);
+    d.appendChild(b); d.appendChild(s); d.appendChild(tm); box.appendChild(d);
   }
   function emptyReason(d){
     if(!d.loop_started) return 'Vòng chat chưa chạy trên máy chủ này';
@@ -2620,11 +2806,16 @@ $('chat-form').onsubmit = async e=>{
       var d=await r.json();
       setStatus(d);
       if(first && !d.messages.length){ box.innerHTML='<div class="vp-empty">⏳ '+emptyReason(d)+'<br><b>Làm gì tiếp:</b> vòng chat chạy tự động mỗi giờ — tin đầu tiên sẽ hiện ở đây, không cần bấm gì. Nếu sau 1 giờ vẫn trống, kiểm tra vòng chat trên máy chủ rồi tải lại trang.</div>'; if(document.body.classList.contains('simple-view')) renderSimple(); return; }
-      if(first) box.innerHTML='';
+      if(first){ box.innerHTML=''; lastDate=''; lastAgent=''; }
       d.messages.forEach(function(m){
         if(seen[m.id]) return; seen[m.id]=1; addMsg(m);
         if(m.id>lastId) lastId=m.id;
+        if(vpLastRead!==null && m.id>vpLastRead) vpUnread++;
       });
+      if(firstPoll){
+        firstPoll=false;
+        if(vpLastRead===null) markVpRead(); else updateUnreadBadge();
+      } else updateUnreadBadge();
       if(document.body.classList.contains('simple-view')) renderSimple();
     }catch(e){}
   }

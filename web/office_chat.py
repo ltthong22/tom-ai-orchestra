@@ -160,9 +160,11 @@ def get_vp_summary():
         pending_count, _titles = _pending_titles()
     except Exception:
         pending_count = 0
+        _titles = []
     return {"vp_topic": topic,
             "vp_speakers": speakers,
             "vp_pending_count": pending_count,
+            "vp_pending_titles": _titles[:20],
             "vp_last_round": last_round,
             "vp_last_error": _short(_last_error, 120) if _last_error else "",
             "vp_loop_started": _started}
