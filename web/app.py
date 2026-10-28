@@ -8,8 +8,16 @@ Chạy: python3 web/app.py  ->  http://localhost:8099
 # Version hien thi tren giao dien — TANG MOI LAN SHIP BAN MOI.
 # Quy tac 26/10/2026 (anh chot): moi thu tao ra deu phai hien version + ngay
 # de phan biet ban cu/moi.
-ORCHESTRA_VERSION = "2.7"
-ORCHESTRA_VERSION_DATE = "26/10/2026"
+ORCHESTRA_VERSION = "2.9"
+ORCHESTRA_VERSION_DATE = "28/10/2026"
+
+# ============ Voice (28/10/2026): noi bang giong noi tieng Viet -> task-bus ============
+# Trang /voice (Web Speech API) + endpoint Siri /api/voice-task.
+# Quy uoc (xem VOICE.md): from luon la 'orchestra-voice'; source phan biet
+# kenh vao ('voice-page' | 'siri'). Trang Voice HIEN version + ngay (quy tac 26/10).
+VOICE_VERSION = "1.0"
+VOICE_VERSION_DATE = "28/10/2026"
+
 import html
 import json
 import os
@@ -35,6 +43,10 @@ try:
 except Exception:
     pass
 from orchestrator import Orchestrator, SubTask
+try:
+    from orchestrator.board import build_board_html as _build_board_html
+except Exception:
+    _build_board_html = None
 from auth.auth import verify, make_session, check_session, destroy_session, create_user, get_csrf
 
 try:
@@ -52,6 +64,104 @@ except Exception:
 
 orch = Orchestrator()
 PORT = int(os.environ.get("PORT") or os.environ.get("WEB_PORT", "8099"))
+
+TASK_BUS_DIR = os.path.expanduser("~/workspace/task-bus")
+
+
+def _voice_now_iso():
+    """Thoi gian hien tai dang ISO +07:00, khop format task-bus."""
+    from datetime import datetime, timezone, timedelta
+    return datetime.now(timezone(timedelta(hours=7))).isoformat(timespec="seconds")
+
+
+def _voice_timestamp():
+    """Timestamp dang YYYYMMDD-HHMMSS cho ten file task-bus."""
+    from datetime import datetime, timezone, timedelta
+    return datetime.now(timezone(timedelta(hours=7))).strftime("%Y%m%d-%H%M%S")
+
+
+def _voice_dests():
+    """Side chat dich co the chon: 'main' + slug tu file task-bus cu (from).
+
+    Chi nhan slug dang [a-z0-9-]; bo ten hien thi co khoang trang/dau [].
+    'main' luon dung dau (mac dinh, de main chat tu dieu phoi).
+    """
+    dests = ["main"]
+    seen = set()
+    for sub in ("pending", "done", "claimed"):
+        d = os.path.join(TASK_BUS_DIR, sub)
+        if not os.path.isdir(d):
+            continue
+        for fn in os.listdir(d):
+            if not fn.endswith(".json"):
+                continue
+            try:
+                with open(os.path.join(d, fn), encoding="utf-8") as f:
+                    j = json.load(f)
+                frm = j.get("from", "")
+                if (isinstance(frm, str) and frm and frm != "main"
+                        and frm != "orchestra-voice"
+                        and all(c.islower() or c.isdigit() or c == "-" for c in frm)
+                        and frm not in seen):
+                    seen.add(frm)
+                    dests.append(frm)
+            except Exception:
+                continue
+    return dests
+
+
+def _voice_find(voice_id):
+    """Tim task voice theo voice_id: done -> claimed -> pending.
+
+    Tra ve (status, data, filename) hoac (None, None, None) neu khong thay.
+    """
+    for sub in ("done", "claimed", "pending"):
+        d = os.path.join(TASK_BUS_DIR, sub)
+        if not os.path.isdir(d):
+            continue
+        for fn in sorted(os.listdir(d)):
+            if not fn.endswith(".json"):
+                continue
+            try:
+                with open(os.path.join(d, fn), encoding="utf-8") as f:
+                    j = json.load(f)
+            except Exception:
+                continue
+            if j.get("voice_id") == voice_id:
+                status = "done" if sub == "done" else j.get("status", "pending")
+                return status, j, fn
+    return None, None, None
+
+
+def _voice_write_task(text, dest, source):
+    """Ghi task voice vao task-bus pending. Tra ve (voice_id, filename, dest).
+
+    Ghi kieu atomic (tmp + os.replace) de watcher khong doc file do.
+    Dest la thi ve 'main' neu khong nam trong danh sach cho phep.
+    """
+    if dest not in _voice_dests():
+        dest = "main"
+    ts = _voice_timestamp()
+    short = secrets.token_hex(3)
+    voice_id = "voice-" + ts.replace("-", "") + "-" + short
+    fn = f"{ts}-voice-{short}.json"
+    data = {
+        "from": "orchestra-voice",
+        "to": dest,
+        "task": text,
+        "created_at": _voice_now_iso(),
+        "status": "pending",
+        "needs_approval": False,
+        "voice_id": voice_id,
+        "source": source,
+    }
+    pend = os.path.join(TASK_BUS_DIR, "pending")
+    os.makedirs(pend, exist_ok=True)
+    tmp = os.path.join(pend, f".{fn}.tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, os.path.join(pend, fn))
+    return voice_id, fn, dest
 
 # ============ Bảo mật: throttle login ============
 # Sau 5 lần đăng nhập sai trong 15 phút -> khóa IP 15 phút
@@ -316,6 +426,7 @@ def page(title, body, active="/", user=""):
 <div class="iconbar">
   <div class="ib-logo" title="Tom AI Orchestra">🎼</div>
   <button id="ib-vp" title="Chuyển VP 2D / 3D">🏢</button>
+  <button id="ib-voice" title="Voice — nói chuyện bằng giọng nói">🎤</button>
   <div class="ib-sep"></div>
   <button id="ib-sync" title="Đồng bộ skills + quy tắc">🔄</button>
   <div class="ib-spacer"></div>
@@ -347,6 +458,11 @@ def page(title, body, active="/", user=""):
   // highlight VP button khi đang ở trang VP
   if(location.pathname === '/ai-office' || location.pathname === '/ai-office-3d'){{
     document.getElementById('ib-vp').classList.add('active');
+  }}
+  // Voice
+  document.getElementById('ib-voice').onclick = function(){{ location.href = '/voice'; }};
+  if(location.pathname === '/voice'){{
+    document.getElementById('ib-voice').classList.add('active');
   }}
   // Sync popup
   document.getElementById('ib-sync').onclick = async function(){{
@@ -515,6 +631,10 @@ class H(BaseHTTPRequestHandler):
             self._api_office3d_state(); return
         if p == "/chat":
             self._chat_page(user); return
+        if p == "/voice":
+            self._voice_page(user); return
+        if p == "/api/voice/poll":
+            self._voice_poll(q); return
         if p == "/api/chat/history":
             self._api_chat_history(); return
         if p == "/api/kb/reload":
@@ -1672,14 +1792,14 @@ window.addEventListener('resize', ()=>{{ /* redraw on next tick */ }});
              "route": "G: → J:", "status": "done", "pct": 100,
              "detail": "81GB → J: xong"},
             {"id": "B2", "char": "\U0001F41C", "name": "Work (70GB)",
-             "route": "G: → H:\\Work-G-temp", "status": "run", "pct": -1,
-             "detail": "đang sync…"},
+             "route": "G: → H:\\Work-G-temp", "status": "done", "pct": 100,
+             "detail": "70GB → H: xong"},
             {"id": "B3", "char": "\U0001F9A5", "name": "Vertex/Pic/Fonts/2023 (26GB)",
-             "route": "G: → H:", "status": "wait", "pct": 0,
-             "detail": "chờ B2 xong"},
+             "route": "G: → H:", "status": "done", "pct": 100,
+             "detail": "26GB → H: xong"},
             {"id": "B4", "char": "\U0001F9A3", "name": "EC Team (295GB)",
-             "route": "H: → G:", "status": "wait", "pct": 0,
-             "detail": "chờ B3 xong"},
+             "route": "H: → G:", "status": "done", "pct": 100,
+             "detail": "295GB → G: xong"},
         ]
         rep = rpg.get("company", {}).get("reputation", 82)
         avg_ok = (round(sum(a["ok_rate"] for a in agents) / len(agents), 1)
@@ -1956,6 +2076,32 @@ body.simple-view #simple-view{display:grid;grid-template-columns:300px 300px 1fr
  border:1px solid #223148;background:#1a2436;color:#e8eef5;
  font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;
 }
+
+/* ---- v2.9 Don trang 3D cho de nhin: 3D lam trong tam, panel phu thu gon mac dinh (chi hien thi) ---- */
+#hud-left,#hud-right{display:none}
+body.show-left #hud-left{display:block}
+body.show-right #hud-right{display:block}
+#hud-left-toggle{top:76px;left:66px}
+#hud-right-toggle{top:76px;right:10px}
+.hud-toggle-btn{pointer-events:auto;background:rgba(13,20,32,.92);border:1px solid rgba(120,160,220,.4);
+ color:#e8eef5;border-radius:16px;padding:7px 14px;font-size:12px;cursor:pointer;
+ box-shadow:0 4px 18px rgba(0,0,0,.45);white-space:nowrap}
+.hud-toggle-btn.on{background:rgba(74,168,255,.28);border-color:#4aa8ff;font-weight:700}
+#settings-btn{right:14px}
+#settings-panel{right:14px}
+body.show-right #settings-btn{right:248px}
+body.show-right #settings-panel{right:248px}
+.vp-collapse{border:1px solid #223148;border-radius:10px;padding:0 10px;margin-top:8px;background:rgba(11,18,32,.5)}
+.vp-collapse>summary{cursor:pointer;list-style:none;padding:8px 0;font-size:12px;font-weight:700;
+ color:#e8eef5;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.vp-collapse>summary::-webkit-details-marker{display:none}
+.vp-collapse>summary::before{content:'▶';font-size:10px;color:#7cc4ff;flex-shrink:0}
+.vp-collapse[open]>summary::before{content:'▼'}
+.vp-collapse .vp-open-hint{margin-left:auto;font-weight:400;color:#7c8da3;font-size:11px}
+.vp-collapse .vp-strip{margin:8px 0}
+#vp-live-box{max-height:220px}
+#vp-live-box .vp-live-msg > span:not(.vp-time){display:-webkit-box;-webkit-line-clamp:3;
+ -webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
 </style></head>
 <body>
 <div class="iconbar3d">
@@ -2024,6 +2170,8 @@ body.simple-view #simple-view{display:grid;grid-template-columns:300px 300px 1fr
  <span id="ec-strip"></span>
 </div></div>
 
+<div class="hud" id="hud-left-toggle"><button class="hud-toggle-btn" id="btn-left-toggle" title="Hiện/ẩn panel nhân sự">🤖 Nhân sự · Token</button></div>
+<div class="hud" id="hud-right-toggle"><button class="hud-toggle-btn" id="btn-right-toggle" title="Hiện/ẩn panel tài chính">💰 Tài chính · Ổ cứng</button></div>
 <div class="hud" id="hud-left"><div class="card">
  <div class="sec-t">🤖 Nhân sự · Token</div>
  <input id="agent-search" class="sv-search" placeholder="🔍 Tìm agent…" autocomplete="off">
@@ -2039,11 +2187,15 @@ body.simple-view #simple-view{display:grid;grid-template-columns:300px 300px 1fr
 <div class="hud" id="hud-bottom"><div class="card">
  <div class="sec-t">💾 Tác vụ chuyển dữ liệu ổ cứng <span style="opacity:.6;font-weight:400">(Kỹ thuật · Dữ liệu)</span></div>
  <div id="ec-steps"></div>
- <div class="sec-t">🔴 VP Sống · Trực tiếp <span style="opacity:.6;font-weight:400">(vòng chat tự động mỗi giờ)</span> <span id="vp-live-status" style="text-transform:none;letter-spacing:0;color:#7cc4ff"></span> <span id="vp-unread" class="unread-badge" style="display:none" title="Tin mới — bấm vào khung chat để đánh dấu đã đọc"></span></div>
+ <details class="vp-collapse" id="vp-live-details">
+ <summary><span>🔴 VP Sống · Trực tiếp</span> <span style="opacity:.6;font-weight:400">(vòng chat tự động mỗi giờ)</span> <span id="vp-live-status" style="text-transform:none;letter-spacing:0;color:#7cc4ff"></span> <span id="vp-unread" class="unread-badge" style="display:none" title="Tin mới — bấm vào khung chat để đánh dấu đã đọc"></span> <span class="vp-open-hint">bấm để mở</span></summary>
  <div id="vp-status-strip" class="vp-strip"></div>
  <div id="vp-live-box"></div>
- <div class="sec-t">🧭 Luồng xử lý vòng chat <span style="opacity:.6;font-weight:400">(theo thứ tự bước — chỉ hiển thị, không đổi cách vòng chạy)</span></div>
+ </details>
+ <details class="vp-collapse" id="vp-flow-details">
+ <summary><span>🧭 Luồng xử lý vòng chat</span> <span style="opacity:.6;font-weight:400">(theo thứ tự bước — chỉ hiển thị, không đổi cách vòng chạy)</span> <span class="vp-open-hint">bấm để mở</span></summary>
  <div id="vp-flow"></div>
+ </details>
 </div></div>
 
 <div id="simple-view">
@@ -2103,7 +2255,7 @@ let STATE = __STATE__;
 const $ = id => document.getElementById(id);
 
 // ---------- settings ----------
-const DEF_SET = {autoMove:true, camera:'top', refresh:30, labels:true, notify:false};
+const DEF_SET = {autoMove:true, camera:'iso', refresh:30, labels:true, notify:false};
 let SET = Object.assign({}, DEF_SET);
 try{ Object.assign(SET, JSON.parse(localStorage.getItem('vp3d-set')||'{}')); }catch(e){}
 function saveSet(){ localStorage.setItem('vp3d-set', JSON.stringify(SET)); }
@@ -2132,15 +2284,15 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 container.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x070b12);
-scene.fog = new THREE.Fog(0x070b12, 60, 140);
+scene.background = new THREE.Color(0x0a1424);
+scene.fog = new THREE.Fog(0x0a1424, 80, 180);
 const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 400);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true; controls.dampingFactor = 0.08;
 controls.maxPolarAngle = 1.35; controls.minDistance = 8; controls.maxDistance = 120;
 controls.enabled = false;
 
-scene.add(new THREE.HemisphereLight(0x8fb8ff, 0x0a0f18, 0.55));
+scene.add(new THREE.HemisphereLight(0x8fb8ff, 0x0a0f18, 1.0));
 const sun = new THREE.DirectionalLight(0xfff2dd, 1.6);
 sun.position.set(24, 34, 14); sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -2155,9 +2307,9 @@ ZONES.forEach(z=>{
 // ---------- floor ----------
 const floor = new THREE.Mesh(
   new THREE.PlaneGeometry(48, 34),
-  new THREE.MeshStandardMaterial({color:0x0d1420, roughness:.9}));
+  new THREE.MeshStandardMaterial({color:0x14233c, roughness:.9}));
 floor.rotation.x = -Math.PI/2; floor.receiveShadow = true; scene.add(floor);
-const grid = new THREE.GridHelper(48, 24, 0x1c2a44, 0x14202f);
+const grid = new THREE.GridHelper(48, 24, 0x2a3f66, 0x1d2f4a);
 grid.position.y = 0.01; scene.add(grid);
 
 // ---------- label sprite ----------
@@ -2202,7 +2354,7 @@ ZONES.forEach(z=>{
     new THREE.MeshStandardMaterial({color:0x0a0f18, emissive:z.c, emissiveIntensity:.55}));
   screen.position.set(z.x, 1.5, z.z-2.2); scene.add(screen);
   z._screen = screen;
-  const lab = makeLabel(z.icon+' '+z.label, 1.15);
+  const lab = makeLabel(z.icon+' '+z.label, 1.6);
   lab.position.set(z.x, 4.6, z.z); scene.add(lab);
 });
 
@@ -2266,7 +2418,7 @@ function buildAgent(a){
   // label tên + token/cost
   const t30 = (a.tokens && a.tokens[30]) || {};
   const tokTxt = t30.tokens ? ' 🎟️'+fmtT(t30.tokens) : '';
-  const label = makeLabel(a.char+' '+a.name+tokTxt, isMain?1.0:0.85);
+  const label = makeLabel(a.char+' '+a.name+tokTxt, isMain?1.2:1.05);
   label.position.y = R*2 + 1.35; g.add(label);
   // vị trí: Muse ở giữa, các con khác ở phòng ban
   let px, pz;
@@ -2307,7 +2459,7 @@ const robot = (()=>{
     const w = new THREE.Mesh(wheelG, mDark);
     w.rotation.z = Math.PI/2; w.position.set(s*0.3, 0.14, 0); g.add(w);
   });
-  const lab = makeLabel('🤖 Robot', 0.6); lab.position.y = 2.0; g.add(lab);
+  const lab = makeLabel('🤖 Robot', 0.8); lab.position.y = 2.0; g.add(lab);
   g.position.set(0, 0, 0); scene.add(g);
   return {group:g, target:new THREE.Vector3(5,0,5), speed:2.6,
           wanderT:performance.now()/1000+2, tip:tip};
@@ -2598,6 +2750,28 @@ function setSimpleView(on){
   if(back) back.onclick = ()=>setSimpleView(false);
   if(saved === 'simple') setSimpleView(true);
 })();
+
+// ---------- v2.9: panel phu thu gon mac dinh, bam pill de mo (chi hien thi) ----------
+(function(){
+  var panels = {left:false, right:false};
+  try{ var pp = JSON.parse(localStorage.getItem('vp3d-panels')||'{}');
+    panels.left = !!pp.left; panels.right = !!pp.right; }catch(e){}
+  function paint(){
+    document.body.classList.toggle('show-left', panels.left);
+    document.body.classList.toggle('show-right', panels.right);
+    var bl = document.getElementById('btn-left-toggle');
+    var br = document.getElementById('btn-right-toggle');
+    if(bl) bl.classList.toggle('on', panels.left);
+    if(br) br.classList.toggle('on', panels.right);
+    try{ localStorage.setItem('vp3d-panels', JSON.stringify(panels)); }catch(e){}
+  }
+  var bl = document.getElementById('btn-left-toggle');
+  var br = document.getElementById('btn-right-toggle');
+  if(bl) bl.onclick = function(){ panels.left = !panels.left; paint(); };
+  if(br) br.onclick = function(){ panels.right = !panels.right; paint(); };
+  paint();
+})();
+
 renderPanels();
 
 // ---------- data refresh ----------
@@ -3194,11 +3368,11 @@ $('chat-form').onsubmit = async e=>{
             ("B1", "🐢", "Rùa vận chuyển", "INSTA 360 (81GB)", "G:", "J:",
              "done", 100, "81GB → J: xong"),
             ("B2", "🐜", "Kiến thợ", "Work (70GB)", "G:", "H:\\Work-G-temp",
-             "run", -1, "đang sync…"),
+             "done", 100, "70GB → H: xong"),
             ("B3", "🦥", "Lười biếng", "Vertex/Pic/Fonts/2023 (26GB)", "G:", "H:",
-             "wait", 0, "chờ B2 xong"),
+             "done", 100, "26GB → H: xong"),
             ("B4", "🦣", "Voi khổng lồ", "EC Team (295GB)", "H:", "G:",
-             "wait", 0, "chờ B3 xong"),
+             "done", 100, "295GB → G: xong"),
         ]
 
         def ec_card(sid, char, cname, name, src, dst, st, pct, detail):
@@ -3657,12 +3831,12 @@ loadH();
                          "giao việc ở <a href='/new'>➕ Giao việc</a> hoặc nhắn "
                          "<a href='/chat'>💬 Chat AI</a></div>")
         # ----- dải tiến trình sticky (luôn hiển thị) -----
-        # EC shuffle mini: B1 xong, B2 chạy, B3/B4 chờ
+        # EC shuffle mini: B1–B4 xong (23/10/2026)
         ec_mini = (
             "<span class='ofc-stk-item done'>✅ B1</span>"
-            "<span class='ofc-stk-item run'>🔄 B2</span>"
-            "<span class='ofc-stk-item'>⏳ B3</span>"
-            "<span class='ofc-stk-item'>⏳ B4</span>")
+            "<span class='ofc-stk-item done'>✅ B2</span>"
+            "<span class='ofc-stk-item done'>✅ B3</span>"
+            "<span class='ofc-stk-item done'>✅ B4</span>")
         busy_mini = "".join(
             f"<span class='ofc-stk-item run'>{a[1]} {a[2]}</span>"
             for a in AGENTS if inflight.get(a[0], 0) > 0)
@@ -3709,9 +3883,17 @@ loadH();
                 "<div class='ofc-empty'>Chưa có việc đang chờ.<br>"
                 "<b>Làm gì tiếp:</b> giao việc mới ở <b>/new</b> để vòng "
                 "chat có chủ đề bàn.</div>")
+        try:
+            board_html = _build_board_html(TASK_BUS_DIR) if _build_board_html else ""
+        except Exception:
+            board_html = ("<div class='ofc-sec-title'>📋 Bảng tiến trình tổng</div>"
+                          "<div style='color:#f59e0b;font-size:13px'>"
+                          "Không tải được bảng (lỗi kỹ thuật, trang vẫn chạy bình thường).</div>")
         body = (f"<style>{css}</style>"
                 f"{sticky_html}"
                 f"<h1>🏢 Văn Phòng AI <span class='ofc-live'>● LIVE</span>"
+                f" <span style='font-size:12px;color:#7cc4ff;border:1px solid #2a3d5c;border-radius:12px;padding:2px 10px'>"
+                f"v{ORCHESTRA_VERSION} · {ORCHESTRA_VERSION_DATE}</span>"
                 f"<a class='ofc-chat-link' href='/chat'>💬 Vào Chat AI</a>"
                 f"<button id='ofc-simple-toggle' class='ofc-chat-link' "
                 f"style='background:none;cursor:pointer'>📋 Đơn giản</button></h1>"
@@ -3736,6 +3918,7 @@ loadH();
                 f"</div>"
                 f"{flow_html}"
                 f"{ec_section}"
+                f"{board_html}"
                 f"<div class='ofc-metrics' style='grid-template-columns:repeat(3,1fr)'>{disk_html}</div>"
                 f"<div class='ofc-sec-title ofc-hide-simple'>🎟️ Token chi tiết theo AI</div>"
                 f"{tok_table}"
@@ -3836,11 +4019,281 @@ loadH();
             active="/settings", user=user))
 
     # ============ POST ============
+    # ---------- Voice: noi bang giong noi tieng Viet -> task-bus ----------
+    def _voice_page(self, user):
+        csrf = self._csrf_token() or ""
+        dests = _voice_dests()
+        friendly = {
+            "main": "Main chat (tự điều phối sang side chat đúng)",
+            "ky-thuat-luu-tru": "Kỹ thuật – Lưu trữ",
+            "app-desktop-mobile": "App Desktop & Mobile",
+        }
+        opts = ""
+        for d in dests:
+            label = friendly.get(d, d)
+            sel = " selected" if d == "main" else ""
+            opts += f"<option value=\"{html.escape(d)}\"{sel}>{html.escape(label)}</option>"
+        body = """
+<h1>🎤 Voice — nói chuyện bằng giọng nói <span class="badge running">Voice __VOICE_VERSION__ · __VOICE_DATE__</span></h1>
+<p class="muted">Bấm mic, nói tiếng Việt, gửi qua task-bus tới Main chat rồi sang side chat. Khi có trả lời, trang sẽ tự đọc lại bằng giọng nói. Đây là gửi nhận bất đồng bộ (thường vài phút), không phải hội thoại live.</p>
+<div class="card">
+<p id="voice-support" class="muted">⏳ Đang kiểm tra trình duyệt...</p>
+<button id="voice-mic" class="btn">🎤 Bấm để nói</button>
+<label>Nội dung (nói hoặc gõ tay)</label>
+<textarea id="voice-text" placeholder="Bấm mic rồi nói tiếng Việt... hoặc gõ tay vào đây"></textarea>
+<label>Gửi tới</label>
+<select id="voice-dest">__DEST_OPTIONS__</select>
+<button id="voice-send" class="btn">📤 Gửi qua task-bus</button>
+<div id="voice-status" style="margin-top:12px"></div>
+</div>
+<div id="voice-result-box" class="card" style="display:none;margin-top:12px">
+<h3>✅ Trả lời</h3>
+<div id="voice-result"></div>
+<button id="voice-replay" class="btn btn-ghost">🔊 Nghe lại</button>
+</div>
+<div class="card" style="margin-top:12px">
+<h3>📱 Dùng với Siri</h3>
+<p class="muted">Đã có endpoint cho iOS Shortcut: POST /api/voice-task (kèm token X-Voice-Token). Hướng dẫn tạo Shortcut + giới hạn v1 xem trong file VOICE.md của app và báo cáo. Lưu ý: điện thoại cần tới được app qua tunnel — bản Railway không nối task-bus của VM nên không dùng cho cầu này.</p>
+<h3>⚙️ Cách hoạt động</h3>
+<p class="muted">Voice → task-bus pending (from=orchestra-voice, kèm voice_id) → watcher 5 phút báo Main chat → Main chat điều phối sang side chat → side chat xử lý, ghi kết quả vào trường result của file done (giữ voice_id) → trang này poll thấy done thì đọc lại bằng giọng nói tiếng Việt.</p>
+</div>
+<script>
+const VOICE_CSRF = "__CSRF__";
+const voiceText = document.getElementById('voice-text');
+const voiceMic = document.getElementById('voice-mic');
+const voiceSend = document.getElementById('voice-send');
+const voiceStatus = document.getElementById('voice-status');
+const voiceSupport = document.getElementById('voice-support');
+const voiceResultBox = document.getElementById('voice-result-box');
+const voiceResult = document.getElementById('voice-result');
+const voiceReplay = document.getElementById('voice-replay');
+let voiceRec = null;
+let voiceListening = false;
+let voicePollTimer = null;
+let voiceCurrentId = '';
+let voiceLastResult = '';
+function voiceSetStatus(html){ voiceStatus.innerHTML = html; }
+function voiceSpeak(text){
+  voiceLastResult = text;
+  if(!('speechSynthesis' in window)){ return false; }
+  try{
+    window.speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = 'vi-VN';
+    u.rate = 1;
+    window.speechSynthesis.speak(u);
+    return true;
+  }catch(e){ return false; }
+}
+voiceReplay.onclick = function(){ if(voiceLastResult){ voiceSpeak(voiceLastResult); } };
+var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if(SR){
+  voiceSupport.textContent = '✅ Trình duyệt hỗ trợ nhận giọng nói tiếng Việt (Web Speech API).';
+  voiceMic.onclick = function(){
+    if(voiceListening){ try{ voiceRec.stop(); }catch(e){} return; }
+    voiceRec = new SR();
+    voiceRec.lang = 'vi-VN';
+    voiceRec.interimResults = true;
+    voiceRec.continuous = false;
+    voiceRec.onresult = function(ev){
+      var finalText = '';
+      var interimText = '';
+      for(var i = ev.resultIndex; i < ev.results.length; i++){
+        if(ev.results[i].isFinal){ finalText += ev.results[i][0].transcript; }
+        else { interimText += ev.results[i][0].transcript; }
+      }
+      if(finalText){ voiceText.value = (voiceText.value + ' ' + finalText).trim(); }
+      if(interimText){ voiceSupport.textContent = '🎧 Đang nghe: ' + interimText; }
+    };
+    voiceRec.onend = function(){
+      voiceListening = false;
+      voiceMic.textContent = '🎤 Bấm để nói';
+      voiceSupport.textContent = '✅ Trình duyệt hỗ trợ nhận giọng nói tiếng Việt (Web Speech API).';
+    };
+    voiceRec.onerror = function(ev){
+      voiceListening = false;
+      voiceMic.textContent = '🎤 Bấm để nói';
+      voiceSupport.textContent = '⚠️ Lỗi nhận giọng nói: ' + (ev.error || 'không rõ') + '. Hãy gõ tay rồi gửi.';
+    };
+    try{
+      voiceRec.start();
+      voiceListening = true;
+      voiceMic.textContent = '⏹️ Bấm để dừng';
+      voiceSupport.textContent = '🎧 Đang nghe... nói tiếng Việt đi anh.';
+    }catch(e){
+      voiceSupport.textContent = '⚠️ Không mở được mic: ' + e + '. Hãy gõ tay rồi gửi.';
+    }
+  };
+} else {
+  voiceSupport.textContent = '⚠️ Trình duyệt này không hỗ trợ Web Speech API — nút mic bị tắt. Hãy dùng Chrome (Android/máy tính) hoặc Safari mới, hoặc gõ tay vào ô rồi gửi.';
+  voiceMic.disabled = true;
+  voiceMic.textContent = '🎤 Không hỗ trợ mic trên trình duyệt này';
+}
+async function voicePoll(){
+  if(!voiceCurrentId) return;
+  try{
+    var r = await fetch('/api/voice/poll?voice_id=' + encodeURIComponent(voiceCurrentId));
+    var d = await r.json();
+    if(d.status === 'done'){
+      clearInterval(voicePollTimer);
+      voicePollTimer = null;
+      var res = d.result || '(Đã xong nhưng không có nội dung trả lời.)';
+      voiceResult.textContent = res;
+      voiceResultBox.style.display = 'block';
+      voiceSetStatus('✅ Đã có trả lời.');
+      var ok = voiceSpeak(res);
+      if(!ok){ voiceSetStatus('✅ Đã có trả lời. (Máy không tự đọc được — bấm 🔊 Nghe lại.)'); }
+    } else if(d.status === 'working'){
+      voiceSetStatus('🔄 Đang xử lý... ' + (d.detail || '') + (d.progress ? ' (' + d.progress + '%)' : ''));
+    } else if(d.status === 'pending'){
+      voiceSetStatus('⏳ Đang chờ Main chat điều phối...');
+    } else {
+      voiceSetStatus('⚠️ Không tìm thấy task ' + voiceCurrentId + '.');
+      clearInterval(voicePollTimer);
+      voicePollTimer = null;
+    }
+  }catch(e){
+    voiceSetStatus('⚠️ Lỗi kiểm tra trả lời: ' + e);
+  }
+}
+voiceSend.onclick = async function(){
+  var text = voiceText.value.trim();
+  var dest = document.getElementById('voice-dest').value;
+  if(!text){ voiceSetStatus('⚠️ Chưa có nội dung — bấm mic nói hoặc gõ tay rồi gửi.'); return; }
+  voiceSend.disabled = true;
+  voiceSend.textContent = '⏳ Đang gửi...';
+  try{
+    var r = await fetch('/api/voice/send', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: 'text=' + encodeURIComponent(text) + '&dest=' + encodeURIComponent(dest) + '&csrf=' + encodeURIComponent(VOICE_CSRF)
+    });
+    var d = await r.json();
+    if(d.ok){
+      voiceCurrentId = d.voice_id;
+      voiceResultBox.style.display = 'none';
+      voiceSetStatus('✅ Đã gửi qua task-bus (voice_id: ' + d.voice_id + ', tới: ' + d.to + '). Đang chờ trả lời...');
+      if(voicePollTimer){ clearInterval(voicePollTimer); }
+      voicePollTimer = setInterval(voicePoll, 5000);
+    } else {
+      voiceSetStatus('❌ Lỗi gửi: ' + (d.error || 'không rõ'));
+    }
+  }catch(e){
+    voiceSetStatus('❌ Lỗi gửi: ' + e);
+  }
+  voiceSend.disabled = false;
+  voiceSend.textContent = '📤 Gửi qua task-bus';
+};
+</script>
+"""
+        body = body.replace("__CSRF__", csrf).replace("__DEST_OPTIONS__", opts).replace("__VOICE_VERSION__", VOICE_VERSION).replace("__VOICE_DATE__", VOICE_VERSION_DATE)
+        self._send(page("Voice", body, active="/voice", user=user))
+
+    def _voice_send(self, q):
+        """POST /api/voice/send — trang Voice gui text qua task-bus."""
+        import json as _json
+        text = q.get("text", [""])[0].strip()
+        dest = q.get("dest", ["main"])[0].strip() or "main"
+        if not text:
+            body = _json.dumps({"ok": False, "error": "Chưa có nội dung — bấm mic nói hoặc gõ tay rồi gửi."}, ensure_ascii=False).encode("utf-8")
+        elif len(text) > 4000:
+            body = _json.dumps({"ok": False, "error": "Nội dung quá dài (tối đa 4000 ký tự)."}, ensure_ascii=False).encode("utf-8")
+        else:
+            try:
+                voice_id, fn, dest = _voice_write_task(text, dest, "voice-page")
+                body = _json.dumps({"ok": True, "voice_id": voice_id, "file": fn, "to": dest}, ensure_ascii=False).encode("utf-8")
+            except Exception as e:
+                body = _json.dumps({"ok": False, "error": f"Không ghi được task-bus: {e}"}, ensure_ascii=False).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _voice_poll(self, q):
+        """GET /api/voice/poll?voice_id=... — trang Voice hoi tra loi."""
+        import json as _json
+        vid = q.get("voice_id", [""])[0].strip()
+        if not vid or not vid.startswith("voice-"):
+            body = _json.dumps({"ok": False, "error": "Thiếu voice_id."}, ensure_ascii=False).encode("utf-8")
+        else:
+            status, data, fn = _voice_find(vid)
+            if status is None:
+                body = _json.dumps({"ok": True, "status": "not_found"}, ensure_ascii=False).encode("utf-8")
+            elif status == "done":
+                body = _json.dumps({"ok": True, "status": "done", "result": data.get("result", ""), "file": fn}, ensure_ascii=False).encode("utf-8")
+            else:
+                body = _json.dumps({"ok": True, "status": status, "progress": data.get("progress"), "detail": data.get("detail", ""), "file": fn}, ensure_ascii=False).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _voice_task_api(self, q):
+        """POST /api/voice-task — iOS Shortcut (Siri) gui text qua task-bus.
+
+        Khong can session login (Shortcut khong co cookie).
+        Xac thuc bang token: header X-Voice-Token hoac ?token=,
+        doi chieu env ORCHESTRA_VOICE_TOKEN (nap tu .env luc khoi dong).
+        Neu chua cau hinh token -> 503 (fail closed).
+        Chap nhan ca form-urlencoded va JSON {text, target|dest}.
+        """
+        import json as _json
+        want = os.environ.get("ORCHESTRA_VOICE_TOKEN", "").strip()
+        if not want:
+            body = _json.dumps({"ok": False, "error": "Chưa cấu hình ORCHESTRA_VOICE_TOKEN trên server (thêm vào .env rồi restart app)."}, ensure_ascii=False).encode("utf-8")
+            code = 503
+        else:
+            got = (self.headers.get("X-Voice-Token", "") or "").strip()
+            if not got:
+                got = q.get("token", [""])[0].strip()
+            if not got or not secrets.compare_digest(got, want):
+                body = _json.dumps({"ok": False, "error": "Token không hợp lệ."}, ensure_ascii=False).encode("utf-8")
+                code = 401
+            else:
+                text = q.get("text", [""])[0].strip()
+                dest = (q.get("target", [""])[0] or q.get("dest", [""])[0] or "main").strip() or "main"
+                if not text:
+                    body = _json.dumps({"ok": False, "error": "Thiếu text."}, ensure_ascii=False).encode("utf-8")
+                    code = 400
+                elif len(text) > 4000:
+                    body = _json.dumps({"ok": False, "error": "Nội dung quá dài (tối đa 4000 ký tự)."}, ensure_ascii=False).encode("utf-8")
+                    code = 400
+                else:
+                    try:
+                        voice_id, fn, dest = _voice_write_task(text, dest, "siri")
+                        print(f"  [voice-task] siri -> {dest} voice_id={voice_id} len={len(text)}")
+                        msg = "Đã gửi: " + (text[:80] + ("..." if len(text) > 80 else ""))
+                        body = _json.dumps({"ok": True, "voice_id": voice_id, "file": fn, "to": dest, "message": msg}, ensure_ascii=False).encode("utf-8")
+                        code = 200
+                    except Exception as e:
+                        body = _json.dumps({"ok": False, "error": f"Không ghi được task-bus: {e}"}, ensure_ascii=False).encode("utf-8")
+                        code = 500
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_POST(self):
         u = urlparse(self.path)
         p = u.path
         n = int(self.headers.get("Content-Length", 0))
-        q = parse_qs(self.rfile.read(n).decode() if n else "")
+        _raw = self.rfile.read(n).decode() if n else ""
+        _ctype = self.headers.get("Content-Type", "")
+        if "application/json" in _ctype and _raw.strip():
+            # Siri Shortcut gui JSON {text, target} — chuan hoa ve dang q giong form
+            try:
+                _jb = json.loads(_raw)
+                if isinstance(_jb, dict):
+                    q = {k: [v if isinstance(v, str) else json.dumps(v, ensure_ascii=False)] for k, v in _jb.items()}
+                else:
+                    q = {}
+            except Exception:
+                q = {}
+        else:
+            q = parse_qs(_raw)
 
         if p == "/login":
             ip = self.client_address[0]
@@ -3866,6 +4319,11 @@ loadH();
                     "<a class='btn' href='/login'>Thử lại</a></div></div>"))
             return
 
+        # Siri endpoint: KHONG can session login (Shortcut khong co cookie).
+        # Xac thuc bang token rieng (X-Voice-Token hoac ?token=) — xem _voice_task_api.
+        if p == "/api/voice-task":
+            self._voice_task_api(q); return
+
         user = self._user()
         if not user:
             self.send_response(302)
@@ -3874,7 +4332,7 @@ loadH();
             return
 
         # CSRF: mọi POST thay đổi trạng thái phải kèm token của session
-        if p in ("/api/chat/send", "/run"):
+        if p in ("/api/chat/send", "/run", "/api/voice/send"):
             if not self._csrf_ok(q):
                 self._send(page("Lỗi",
                     "<div class='card'><p style='color:var(--danger)'>"
@@ -3884,6 +4342,8 @@ loadH();
 
         if p == "/api/chat/send":
             self._api_chat_send(q); return
+        if p == "/api/voice/send":
+            self._voice_send(q); return
         if p == "/run":
             title = q.get("title", ["Task"])[0].strip() or "Task"
             raw = q.get("subs", [""])[0]
